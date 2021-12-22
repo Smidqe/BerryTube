@@ -1,7 +1,7 @@
 const { PollService } = require("./modules/polls");
 const { AuthService, actions } = require("./modules/auth");
 const { sanitize, generateRandomPassword } = require("./modules/security");
-const { sanitizeManifest } = require("./modules/playlist");
+const { sanitizeManifest, PlaylistService } = require("./modules/playlist");
 const { DefaultLog, events, levels, consoleLogger, createStreamLogger } = require("./modules/log");
 const { DatabaseService } = require("./modules/database");
 const { SessionService, getSocketName, userTypes } = require("./modules/sessions");
@@ -47,6 +47,7 @@ const databaseService = serviceLocator.db = new DatabaseService(serviceLocator);
 const authService = serviceLocator.auth = new AuthService(serviceLocator);
 const sessionService = serviceLocator.sessions = new SessionService(serviceLocator);
 const pollService = serviceLocator.polls = new PollService(serviceLocator);
+const playlistService = serviceLocator.playlist = new PlaylistService(serviceLocator);
 
 // all registered services receive certain events, so group them up
 const services = [databaseService, authService, pollService, sessionService];
@@ -490,6 +491,10 @@ function playNext() {
 	SERVER.ACTIVE.position = SERVER.ACTIVE.prev.position + 1;
 	handleNewVideoChange();
 	sendStatus("forceVideoChange", io.sockets);
+
+	playlistService.playNext(null);
+
+	comparePlaylists();
 }
 function prepareBans() {
 	var i = SERVER.BANS.length;
@@ -2128,7 +2133,9 @@ function isTrackingTime() {
 }
 
 /* RUN ONCE INIT */
-initPlaylist(function () {
+initPlaylist(async function () {
+	await playlistService.init();
+
 	initResumePosition(function () {
 		initTimer();
 	});
@@ -2492,7 +2499,7 @@ io.sockets.on('connection', function (ioSocket) {
 			});
 		});
 	});
-	socket.on("playNext", function (data) {
+	socket.on("playNext", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
 			kickForIllegalActivity(socket);
 			return;
@@ -2503,8 +2510,10 @@ io.sockets.on('connection', function (ioSocket) {
 			{ mod: getSocketName(socket), type: "playlist" });
 
 		playNext();
+
+		await playlistService.playNext(socket);
 	});
-	socket.on("sortPlaylist", function (data) {
+	socket.on("sortPlaylist", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
 			kickForIllegalActivity(socket);
 			return;
@@ -2539,8 +2548,11 @@ io.sockets.on('connection', function (ioSocket) {
 		DefaultLog.info(events.EVENT_ADMIN_MOVED_VIDEO,
 			"{mod} moved {title}",
 			{ mod: getSocketName(socket), title: decodeURIComponent(fromelem.videotitle), type: "playlist" });
+	
+		await playlistService.sortPlaylist(socket, data);
+		comparePlaylists();
 	});
-	socket.on("forceVideoChange", function (data) {
+	socket.on("forceVideoChange", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
 			kickForIllegalActivity(socket);
 			return;
@@ -2591,16 +2603,20 @@ io.sockets.on('connection', function (ioSocket) {
 			delVideo({ index: delme });
 		}
 
+		await playlistService.jumpTo(socket, data);
+		comparePlaylists();
 	});
-	socket.on("delVideo", function (data) {
+	socket.on("delVideo", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_DELETE_VIDEO)) {
 			kickForIllegalActivity(socket, "You cannot delete videos.");
 			return;
 		}
 
 		delVideo(data, socket);
+		await playlistService.remove(socket, data);
+		comparePlaylists();
 	});
-	socket.on("addVideo", function (data) {
+	socket.on("addVideo", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
 			kickForIllegalActivity(socket);
 			return;
@@ -2653,6 +2669,10 @@ io.sockets.on('connection', function (ioSocket) {
 
 			socket.emit("dupeAdd");
 		}
+
+		await playlistService.addVideo(socket, data);
+
+		comparePlaylists();
 	});
 	socket.on("importPlaylist", function (data) {
 		// old implementation can be found in source control
@@ -2971,5 +2991,36 @@ function withAliases(keys, value) {
 
 	return obj;
 }
+
+function assert_eq(a, b, message) {
+	if (typeof a === 'object') {
+		[a, b] = [JSON.stringify(a), JSON.stringify(b)];
+	}
+
+	if (a !== b) {
+		throw message || "No assert message"
+	}
+}
+function comparePlaylists() {
+	const old = SERVER.PLAYLIST.toArray();
+	const now = playlistService.playlist.videos();
+
+	assert_eq(old.length, now.length, "Lengths don't match");
+	assert_eq(SERVER.ACTIVE.videoid, playlistService.current().id(), `ACTIVE no match: ${SERVER.ACTIVE.videoid} !== ${playlistService.current().id()}`);
+
+	//log the attempt
+	for (let i = 0; i < old.length; i += 1) {
+		let a = old[i];
+		let b = now[i];
+
+		assert_eq(a.videoid, b.id(), `ID's don't match ${a.videoid} ${b.id()}`);
+		assert_eq(a.videolength, b.duration(), `Lengths don't match`);
+		assert_eq(a.videotitle, b.title(), `Titles don't match: ${a.videotitle} ${b.title()}`);
+		assert_eq(a.videotype, b.source(), 'Video sources do not match');
+		assert_eq(a.meta, b.metadata(), `Metadata no match: ${JSON.stringify(a.meta)} !== ${JSON.stringify(b.metadata())}`);
+		assert_eq(a.volat, b.volatile(), `Volatililty no match: ${a.volat} !== ${b.volatile()}`);
+	}
+}
+
 
 /* vim: set noexpandtab : */
