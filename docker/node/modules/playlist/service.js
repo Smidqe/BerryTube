@@ -4,9 +4,17 @@ const { ServiceBase } = require("../base");
 const { events } = require("../log/events");
 const { Playlist } = require("./playlist");
 const { Video } = require("./video");
+
+const settings = require("../../bt_data/settings");
 const config = require("../../bt_data/db_info");
 
 const {YoutubeHandler} = require('./handlers/youtube');
+
+const PlaylistState = {
+	Initial: 0,
+	Running: 1,
+	Paused: 2,
+};
 
 exports.PlaylistService = class extends ServiceBase {
 	constructor(services) {
@@ -18,7 +26,7 @@ exports.PlaylistService = class extends ServiceBase {
 		this.playlist = new Playlist();
 		this.log = services.log;
 		
-		/*
+
 		this.exposeSocketActions({
 			playNext: this.advance.bind(this),
 			sortPlaylist: this.move.bind(this),
@@ -26,7 +34,6 @@ exports.PlaylistService = class extends ServiceBase {
 			addVideo: this.add.bind(this),
 			fondleVideo: this.fondle.bind(this)
 		});
-		*/
 
 		this.handlers = new Map([
 			['yt', new YoutubeHandler()],
@@ -44,29 +51,41 @@ exports.PlaylistService = class extends ServiceBase {
 			['setVolatile', 'setVidVolatile'],
 			['setColorTag', 'setVidColorTag']
 		]);
+
+		this.time = 0;
+		this.state = PlaylistState.Initial;
 	}
 
 	async init() {
 		const items = await this.db.query([`select * from ${config.video_table} order by position`], []);
 		const id = await this.db.misc('server_active_videoid');
+		const time = await this.db.misc('server_time');
 
 		this.playlist.initialise(items.result.map(row => new Video(row)));
 		this.playlist.set_cursor(
 			this.playlist.items.findIndex(v => v.id() === id)
 		);
+
+		this.time = Number.parseInt(time ?? -settings.vc.head_time);
+
+		if (this.time > this.playlist.current().duration()) {
+			this.time = 0;
+		}
 	}
 
-	playNext(socket) {
-		//
+	async clearVolatiles(video) {
+
+	}
+
+	async advance(socket, data) {
 		this.playlist.next();
-		this.log.info(events.EVENT_ADMIN_MOVED_VIDEO,
-			"NEW: Cursor is at: {cursor}",
-			{ cursor: this.playlist.cursor} );
 	}
 
-	async addVideo(socket, data) {
+	async add(socket, data) {
 		if (!this.auth.can(socket, actions.ACTION_CONTROL_PLAYLIST)) {
-			throw new Error("aaaaa");
+			//socket.kick("Illegal activity")
+			
+			throw new Error("Cannot");
 		}
 		
 		await this.handlers[data.videotype].handle(data).then(async video => {
@@ -77,12 +96,11 @@ exports.PlaylistService = class extends ServiceBase {
 				queue: data.queue,
 				pos: data.queue ? this.playlist.cursor + 1 : this.playlist.items().length, 
 			};
-			/*
+
 			await this.db.query(
 				[`insert into ${config.video_table} (position, videoid, videotitle, videolength, videotype, videovia, meta) VALUES (?,?,?,?,?,?,?)`],
 				[data.pos, video.id(), video.title(), video.length(), video.source(), video.who(), video.meta()]
 			);
-			*/
 
 			//add to actual playlist
 			if (!data.queue || !this.playlist.items().length) {
@@ -90,49 +108,35 @@ exports.PlaylistService = class extends ServiceBase {
 			} else {
 				this.playlist.insert(video, this.playlist.cursor + 1);
 				
-				/*
 				//update positions
 				await this.db.query(
 					[`update ${config.video_table} set position = position + 1 where position > ?`],
 					[data.pos]
 				);
-				*/
 			}
 
-			//this.io.sockets.emit('addVideo', {queue: data.queue, video, sanityid: this.current().id()});
+			this.io.sockets.emit('addVideo', {queue: data.queue, video, sanityid: this.current().id()});
 		});
-
-		this.log.info(events.EVENT_ADMIN_MOVED_VIDEO,
-			"NEW: Cursor is at: {cursor}",
-			{ cursor: this.playlist.cursor} );
 	}
 
 	resync(socket) {
-		//socket.emit("recvNewPlaylist", this.items);
-		//socket.emit('doorStuck');
+		socket.emit("recvNewPlaylist", this.items);
+		socket.emit('doorStuck');
 	}
 
-	async sortPlaylist(socket, data) {
+	async move(socket, data) {
 		if (this.playlist.at(data.from).id() !== data.sanityid) {
 			return this.resync(socket);
 		}
 
 		this.playlist.move(data.from, data.to);
-		/*
+		
 		await this.db.query(
 			[`update ${config.video_table} set position = position - 1 where position > ? and position <= ?`],
 			[data.from, data.to]
 		);
-		*/
 
-		//this.io.sockets.emit("sortPlaylist", data);
-		this.log.info(events.EVENT_ADMIN_MOVED_VIDEO,
-			"NEW: {mod} moved {title}",
-			{ mod: getSocketName(socket), title: this.playlist.at(data.to).title(), type: "playlist" });
-	
-		this.log.info(events.EVENT_ADMIN_MOVED_VIDEO,
-			"NEW: Cursor is at: {cursor}",
-			{ cursor: this.playlist.cursor} );
+		this.io.sockets.emit('sortPlaylist', data);
 	}
 
 	async remove(socket, data) {
@@ -147,7 +151,6 @@ exports.PlaylistService = class extends ServiceBase {
 			this.playlist.set_cursor(data.pos + 1);
 		}
 
-		/*
 		//handle db queries
 		await this.db.query([`delete from ${config.video_table} where videoid = ? limit 1`], [video.id()]).then(async () => {
 			if (video.length() <= 0) {
@@ -174,10 +177,9 @@ exports.PlaylistService = class extends ServiceBase {
 			[`update ${config.video_table} set position = position - 1 where position > ?`],
 			[data.pos]
 		);
-		*/
 
 		this.playlist.remove(data.pos);
-		//this.io.sockets.emit('delVideo', data);
+		this.io.sockets.emit('delVideo', data);
 
 		this.log.info(events.EVENT_ADMIN_MOVED_VIDEO,
 			"NEW: Cursor is at: {cursor}",
@@ -194,7 +196,7 @@ exports.PlaylistService = class extends ServiceBase {
 		}
 
 		if (!active.volatile() && active.hasTag(true)) {
-			active.removeTag();
+			active.removeTag(true);
 		}
 
 		this.playlist.set_cursor(data.index);
@@ -203,13 +205,10 @@ exports.PlaylistService = class extends ServiceBase {
 			await this.remove(socket, {sanityid: active.id(), pos: index});
 		}
 
+		this.announce(this.io.sockets, 'forceVideoChange');
 		this.log.info(events.EVENT_ADMIN_FORCED_VIDEO_CHANGE,
 			"NEW: {mod} forced video change",
 			{ mod: getSocketName(socket), type: "playlist" });
-
-		this.log.info(events.EVENT_ADMIN_MOVED_VIDEO,
-			"NEW: Cursor is at: {cursor}",
-			{ cursor: this.playlist.cursor} );
 	}
 
 	sanity(id) {
@@ -217,12 +216,12 @@ exports.PlaylistService = class extends ServiceBase {
 	}
 
 	async fondle(socket, data) {
-		if (!this.sanity(data.sanityid)) {
-			return this.resync(socket);
-		}
-
 		if (!this.auth.can(socket.session, actions.ACTION_SET_VIDEO_VOLATILE)) {
 			return;
+		}
+
+		if (!this.sanity(data.sanityid)) {
+			return this.resync(socket);
 		}
 
 		const video = this.playlist.at(data.info.pos);
@@ -238,10 +237,48 @@ exports.PlaylistService = class extends ServiceBase {
 		);
 
 		//save a single video (update all possible cases just incase instead of specifying which columns)
-		this.db.upsert(
-			config.video_table, 
-			`videoid = ${video.id()}`, 
-			[['volat', 'meta'], [video.volatile(), video.meta()]]
+		if (data.action !== 'setVolatile') {
+			await this.db.update(
+				config.video_table, 
+				`videoid = ${video.id()}`, 
+				[['meta'], [video.meta()]]
+			);
+		}
+	}
+
+	async announce(socket, event) {
+		socket.emit(event, {
+			video: this.playlist.current().pack(),
+			time: this.time,
+			state: this.state
+		});
+	}
+
+	async onTick(elapsed) {
+		if (this.state === PlaylistState.Paused) {
+			return;
+		}
+
+		this.time += Math.floor(elapsed / 1000);
+
+		const current = this.playlist.current();
+		const sync = this.time > 0 && this.time < (current.duration() - settings.vc.tail_time);
+		
+		//send heartbeat every x seconds (if we are within syncing time frame)
+		if (sync && this.time % settings.core.heartbeat_interval === 0) {
+			this.announce(this.io.sockets, 'hbVideoDetail');
+		}
+
+		//we've reached end of video, play next video
+		if (this.time > current.duration()) {
+			this.advance(this.io.sockets);
+			this.time = -settings.vc.head_time;
+		}
+
+		await this.db.upsert(
+			config.misc_table,
+			`value = ${this.time.elapsed}`,
+			[['name', 'value'], ['server_time', this.time]]
 		);
 	}
 };

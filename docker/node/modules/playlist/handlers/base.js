@@ -9,7 +9,7 @@ exports.Handler = class {
 		});
 	
 		if (!response.ok) {
-			throw {error: new Error(`Failed to get response from youtube: ${response.status}`)};
+			throw new Error(`Failed to get response from ${url}: ${response.status}`);
 		}
 	
 		return response.json();

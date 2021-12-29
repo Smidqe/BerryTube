@@ -51,4 +51,15 @@ exports.Video = class {
 	removeTag() {
 		delete this.meta.tag;
 	}
+
+	pack() {
+		return {
+			videoid: this.videoid,
+			videotitle: this.videotitle,
+			videolength: this.videolength,
+			videotype: this.videotype,
+			meta: this.meta,
+			volat: this.volat,
+		};
+	}
 };
