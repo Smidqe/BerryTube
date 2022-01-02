@@ -38,15 +38,6 @@ exports.SoundcloudHandler = class extends Handler {
 		return this.token.value;
 	}
 
-	async json(path) {
-		return super.api(
-			path,
-			{
-				'Accept': 'application/json'
-			}
-		);
-	}
-
 	async handle(data) {
 		const id = encodeURIComponent(data.videoid.trim());
 

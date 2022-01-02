@@ -10,11 +10,8 @@ exports.YoutubeHandler = class extends Handler {
 		super();
 	}
 
-	getGeoblockedCountries(check, restrictions) {
-		if (!check) {
-			return false;
-		}
-
+	getGeoblockedCountries(restrictions) {
+		//not blocked anywhere
 		if (!restrictions || !restrictions.blocked && !restrictions.allowed) {
 			return false;
 		}
@@ -71,21 +68,16 @@ exports.YoutubeHandler = class extends Handler {
 		const video = json?.items[0];
 		const restrictions = {
 			embeddable: !video.status.embeddable,
-			geoblock: this.getGeoblockedCountries(data.force, video.contentDetails.regionRestriction),
+			geoblock: this.getGeoblockedCountries(video.contentDetails.regionRestriction),
 			ageblock: video.contentDetails.contentRating.ytRating === 'ytAgeRestricted'
 		};
 
 		if (!data.force && Object.values(restrictions).some(value => typeof value !== "boolean" || value)) {
 			links.socket.emit("videoRestriction", restrictions);
-			
-			throw new Error("[YT]: Video has restrictions");
+			throw new Error(`Youtube: Video: ${data.videoid} has restrictions`);
 		}
 
-		if (!isoDuration.toSeconds(isoDuration.parse(video?.contentDetails?.duration))) {
-			throw new Error("Duration is null");
-		}
-
-		await super.handle(
+		return super.handle(
 			links,
 			data,
 			new Video({

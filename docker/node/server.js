@@ -1,13 +1,11 @@
 const { PollService } = require("./modules/polls");
 const { AuthService, actions } = require("./modules/auth");
 const { sanitize, generateRandomPassword } = require("./modules/security");
-const { sanitizeManifest, VideoHandlers, Video } = require("./modules/playlist");
+const { VideoHandlers, Video } = require("./modules/playlist");
 const { DefaultLog, events, levels, consoleLogger, createStreamLogger } = require("./modules/log");
 const { DatabaseService } = require("./modules/database");
 const { SessionService, getSocketName, userTypes } = require("./modules/sessions");
-const { parseRawFileUrl } = require("./modules/utils");
 const { EventServer } = require("./modules/event-server");
-const fetchYoutubeVideoInfo = require("youtube-info");
 
 
 // Include the SERVER.settings
@@ -52,16 +50,8 @@ const pollService = serviceLocator.polls = new PollService(serviceLocator);
 // all registered services receive certain events, so group them up
 const services = [databaseService, authService, pollService, sessionService];
 
-var https = require('https');
-var et = require('elementtree');
 var fs = require('fs');
-var util = require('util');
-var url = require('url');
-const getDuration = require('get-video-duration');
-const isoDuration = require('iso8601-duration');
-const fetch = require('node-fetch');
 const bcrypt = require('bcrypt');
-const isoCountries = require('i18n-iso-countries');
 const { randomUUID } = require("crypto");
 
 process.on("uncaughtException", function (err) {
@@ -243,7 +233,7 @@ function initResumePosition(callback) {
 	getMisc({ name: 'server_active_videoid' }, function (old_videoid) {
 		var elem = SERVER.PLAYLIST.first;
 		for (var i = 0; i < SERVER.PLAYLIST.length; i++) {
-			if (elem.videoid == old_videoid) {
+			if (elem.id() == old_videoid) {
 				SERVER.ACTIVE = elem;
 				getMisc({ name: 'server_time' }, function (old_time) {
 					if (+old_time) {
@@ -339,7 +329,7 @@ function initTimer() {
 			service.onTick(elapsedMilliseconds);
 		}
 
-		if (Math.ceil(SERVER.TIME + 1) >= (SERVER.ACTIVE.videolength + SERVER.settings.vc.tail_time)) {
+		if (Math.ceil(SERVER.TIME + 1) >= (SERVER.ACTIVE.duration() + SERVER.settings.vc.tail_time)) {
 			playNext();
 		} else if (SERVER.STATE != 2) {
 			if (isTrackingTime()) {
@@ -353,7 +343,7 @@ function initTimer() {
 	setInterval(function () {
 		if (isTrackingTime()) {
 			if ( // This should prevent the crazy jumping to end/beginning on video change.
-				(SERVER.ACTIVE.videolength - SERVER.TIME > (SERVER.settings.core.heartbeat_interval / 1000)) &&
+				(SERVER.ACTIVE.duration() - SERVER.TIME > (SERVER.settings.core.heartbeat_interval / 1000)) &&
 				(SERVER.TIME > (SERVER.settings.core.heartbeat_interval / 1000))
 			) {
 				sendStatus("hbVideoDetail", io.sockets);
@@ -410,17 +400,20 @@ function setAreas(areaname, content) {
 	sendAreas(io.sockets);
 }
 function sendStatus(name, target) {
-	if (SERVER.ACTIVE != null) {
-		target.emit(name, {
-			video: SERVER.ACTIVE.pack(),
-			time: SERVER.TIME,
-			state: SERVER.STATE
-		});
-		eventServer.emit('videoStatus', {
-			time: Math.round(SERVER.TIME),
-			state: SERVER.STATE
-		});
+	if (!SERVER.ACTIVE) {
+		return;
 	}
+
+	target.emit(name, {
+		video: SERVER.ACTIVE.pack(),
+		time: SERVER.TIME,
+		state: SERVER.STATE
+	});
+
+	eventServer.emit('videoStatus', {
+		time: Math.round(SERVER.TIME),
+		state: SERVER.STATE
+	});
 }
 function doorStuck(socket) {
 	socket.emit("recvNewPlaylist", SERVER.PLAYLIST.toArray());
@@ -539,7 +532,7 @@ var commit = function () {
 	var elem = SERVER.PLAYLIST.first;
 	for (var i = 0; i < SERVER.PLAYLIST.length; i++) {
 		var sql = `update ${SERVER.dbcon.video_table} set position = ? where videoid = ?`;
-		mysql.query(sql, [i, '' + elem.videoid], function (err) {
+		mysql.query(sql, [i, '' + elem.id()], function (err) {
 			if (err) {
 				DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
 				return;
@@ -577,7 +570,7 @@ var commit = function () {
 	upsertMisc({ name: 'shadowbant_ips', value: JSON.stringify(shadowbant) });
 	upsertMisc({ name: 'hardbant_ips', value: JSON.stringify(SERVER.BANS) });
 	upsertMisc({ name: 'server_time', value: '' + Math.ceil(SERVER.TIME) });
-	upsertMisc({ name: 'server_active_videoid', value: '' + SERVER.ACTIVE.videoid });
+	upsertMisc({ name: 'server_active_videoid', value: '' + SERVER.ACTIVE.id() });
 };
 
 const commitInterval = setInterval(commit, SERVER.settings.core.db_commit_delay);
@@ -607,20 +600,20 @@ function getCommand(msg) {
 function handleNewVideoChange() {
 	DefaultLog.info(events.EVENT_VIDEO_CHANGE,
 		"changed video to {videoTitle}",
-		{ videoTitle: decodeURI(SERVER.ACTIVE.videotitle) });
+		{ videoTitle: decodeURI(SERVER.ACTIVE.title()) });
 
 	eventServer.emit('videoChange', {
-		id: SERVER.ACTIVE.videoid,
-		length: SERVER.ACTIVE.videolength,
-		title: decodeURI(SERVER.ACTIVE.videotitle),
-		type: SERVER.ACTIVE.videotype,
-		volat: SERVER.ACTIVE.volat
+		id: SERVER.ACTIVE.id(),
+		length: SERVER.ACTIVE.duration(),
+		title: decodeURI(SERVER.ACTIVE.title()),
+		type: SERVER.ACTIVE.source(),
+		volat: SERVER.ACTIVE.volatile()
 	});
 
 	resetDrinks();
 	resetTime();
 	// Is this a livestream? if so, stop ticking.
-	if (SERVER.ACTIVE.videolength == 0) {
+	if (SERVER.ACTIVE.duration() == 0) {
 		SERVER.LIVE_MODE = true;
 	} else {
 		SERVER.STATE = 1; // Play.
@@ -752,7 +745,7 @@ function setVideoVolatile(socket, pos, isVolat) {
 
 	DefaultLog.info(events.EVENT_ADMIN_SET_VOLATILE,
 		"{mod} set {title} to {status}",
-		{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(elem.videotitle), status: isVolat ? "volatile" : "not volatile" });
+		{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(elem.title()), status: isVolat ? "volatile" : "not volatile" });
 
 	io.sockets.emit("setVidVolatile", {
 		pos: pos,
@@ -774,6 +767,14 @@ function _setVideoColorTag(elem, pos, tag, volat) {
 		elem.meta.colorTag = tag;
 	}
 
+	/*
+	if (!tag) {
+		video.deleteTag(!volat)
+	} else {
+		video.setTag(tag, volat)
+	}
+	*/
+
 	if (volat != true) {
 		delete elem.meta.colorTagVolat;
 	} else {
@@ -781,7 +782,7 @@ function _setVideoColorTag(elem, pos, tag, volat) {
 	}
 
 	var sql = 'update ' + SERVER.dbcon.video_table + ' set meta = ? where videoid = ?';
-	mysql.query(sql, [JSON.stringify(elem.meta), '' + elem.videoid], function (err) {
+	mysql.query(sql, [JSON.stringify(elem.meta), '' + elem.id()], function (err) {
 		if (err) {
 			DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
 			return;
@@ -1688,7 +1689,7 @@ io.sockets.on('connection', function (ioSocket) {
 			}
 			elem = elem.next;
 		}
-		if (data.sanityid && elem.videoid != data.sanityid) { return doorStuck(socket); }
+		if (data.sanityid && elem.id() != data.sanityid) { return doorStuck(socket); }
 		elem = SERVER.PLAYLIST.first;
 		for (var i = 0; i < SERVER.PLAYLIST.length; i++) {
 			if (i == data.to) {
@@ -1705,7 +1706,7 @@ io.sockets.on('connection', function (ioSocket) {
 
 		DefaultLog.info(events.EVENT_ADMIN_MOVED_VIDEO,
 			"{mod} moved {title}",
-			{ mod: getSocketName(socket), title: decodeURIComponent(fromelem.videotitle), type: "playlist" });
+			{ mod: getSocketName(socket), title: decodeURIComponent(fromelem.title()), type: "playlist" });
 	});
 	socket.on("forceVideoChange", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
@@ -1798,19 +1799,19 @@ io.sockets.on('connection', function (ioSocket) {
 		if (!VideoHandlers.has(data.videotype)) {
 			DefaultLog.error(
 				events.EVENT_ADMIN_ADDED_VIDEO,
-				"no handler for {source}, {l}",
-				{source: data.videotype, l: VideoHandlers.size},
+				"no handler for {source}",
+				{source: data.videotype},
 			);
 
+			socket.emit("dupeAdd");
 			return;
 		}
 
-		await VideoHandlers.get(data.videotype).handle(links, data).then(() => {
-			logData.title = details.title;
+		await VideoHandlers.get(data.videotype).handle(links, data).then((video) => {
 			DefaultLog.info(
 				events.EVENT_ADMIN_ADDED_VIDEO,
 				"{mod} added {provider} video {title}",
-				logData);
+				{mod: getSocketName(socket), provider: data.videotype, title: video.title()});
 		}).catch((err) => {
 			DefaultLog.error(
 				events.EVENT_ADMIN_ADDED_VIDEO,
@@ -1995,7 +1996,7 @@ io.sockets.on('connection', function (ioSocket) {
 		for (var i = 0; i < data.info.pos; i++) {
 			elem = elem.next;
 		}
-		if (data.sanityid && elem.videoid != data.sanityid) { return doorStuck(socket); }
+		if (data.sanityid && elem.id() != data.sanityid) { return doorStuck(socket); }
 
 		if ("action" in data) {
 			if (data.action == "setVolatile") {

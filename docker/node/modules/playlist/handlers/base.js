@@ -19,6 +19,7 @@ exports.Handler = class {
 	}
 
 	async handle(services, data, video) {
+		//attach common information
 		const info = {
 			...video.pack(),
 			who: services.socket.session.nick,
@@ -32,10 +33,6 @@ exports.Handler = class {
 			[info.videoid]
 		);
 
-		if (!result) {
-			throw new Error("aaaa");
-		}
-
 		if (result.length === 1) {
 			try {
 				info.meta = {
@@ -43,7 +40,7 @@ exports.Handler = class {
 					...info.meta
 				};
 			} catch (_) {
-				//ignore non object meta
+				//ignore non object meta (will be overwriten)
 			}
 		}
 
@@ -60,5 +57,7 @@ exports.Handler = class {
 		}
 
 		services.io.sockets.emit('addVideo', {queue: data.queue, video: video.pack(), sanityid: services.active.videoid});
+	
+		return video;
 	}
 };
