@@ -4,17 +4,11 @@ const { Handler } = require("./base");
 exports.TwitchHandler = class extends Handler {
 	constructor() {
 		super();
-
-		this.subpaths = new Map([
-			['videos', ''],
-			['channels']
-		]);
-		this.url = 'https://api.twitch.tv/kraken';
 	}
 
 	async api(endpoint, sub, params = {}) {
 		return super.api(
-			`${this.url}/${endpoint}/${sub}`,
+			`https://api.twitch.tv/kraken/${endpoint}/${sub}`,
 			{
 				'Accept': 'application/vnd.twitchtv.v5+json',
 				'Client-ID': '16m5lm4sc21blhrrpyorpy4tco0pa9'
@@ -57,13 +51,20 @@ exports.TwitchHandler = class extends Handler {
 		});
 	}
 
-	async handle(data) {
+	async handle(services, data) {
 		const parts = data.videoid.trim().split('/');
 
+		let video = null;
 		if (parts[0] === 'videos') {
-			return this.getVideo(parts[1]);
+			video = this.getVideo(parts[1]);
 		} else {
-			return this.getChannel(parts[0]);
+			video = this.getChannel(parts[0]);
 		}
+
+		return super.handle(
+			services,
+			data,
+			video
+		);
 	}
 };

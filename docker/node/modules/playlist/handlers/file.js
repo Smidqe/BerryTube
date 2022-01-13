@@ -8,7 +8,7 @@ exports.FileHandler = class extends Handler {
 		super();
 	}
 
-	async handle(data) {
+	async handle(services, data) {
 		const url = data.videoid.trim();
 
 		if (url.length === 0) {
@@ -27,11 +27,15 @@ exports.FileHandler = class extends Handler {
 			throw new Error("File has no duration");
 		}
 
-		return new Video({
-			videoid: url,
-			videotitle: info.title,
-			videolength: duration,
-			videotype: "file",
-		});
+		return super.handle(
+			services,
+			data,
+			new Video({
+				videoid: url,
+				videotitle: info.title,
+				videolength: duration,
+				videotype: "file",
+			})
+		);
 	}
 };

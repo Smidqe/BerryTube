@@ -56,6 +56,14 @@ exports.Video = class {
 		
 	}
 
+	setVolatile(volatile) {
+		this.volat = volatile;
+	}
+
+	setMetadata(meta) {
+		this.meta = meta;
+	}
+
 	pack() {
 		return {
 			videoid: this.videoid,

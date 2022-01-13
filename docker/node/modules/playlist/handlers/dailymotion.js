@@ -15,11 +15,15 @@ exports.DailymotionHandler = class extends Handler {
 			}
 		);
 
-		return new Video({
-			videoid: id,
-			videotitle: encodeURIComponent(json.title),
-			videolength: json.duration,
-			videotype: "dm",
-		});
+		return super.handle(
+			services,
+			data,
+			new Video({
+				videoid: id,
+				videotitle: encodeURI(json.title),
+				videolength: json.duration,
+				videotype: "dm",
+			})
+		);
 	}
 };

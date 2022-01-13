@@ -9,15 +9,6 @@ exports.DashHandler = class extends Handler {
 		super();
 	}
 
-	async json(path) {
-		return super.api(
-			path,
-			{
-				'Accept': 'application/json'
-			}
-		);
-	}
-
 	async handle(links, data) {
 		const id = data.videoid.trim();
 		const video = await super.api(id)
@@ -27,20 +18,16 @@ exports.DashHandler = class extends Handler {
 				const root = manifest.getroot();
 				const duration = isoDuration.toSeconds(isoDuration.parse(root.get('mediaPresentationDuration')));
 
-				if (duration <= 0) {
-					//return VideoHandlers.get('live').handle(links, data);
-				}
-
 				return new Video({
 					videoid: video.id || video.video_id,
 					videotitle: encodeURIComponent(video.title),
 					videolength: duration,
-					videotype: "dash",
+					videotype: duration > 0 ? "dash" : "live",
 					meta: {},
 				});
 			});
 
-		await super.handle(
+		return super.handle(
 			links,
 			data,
 			video

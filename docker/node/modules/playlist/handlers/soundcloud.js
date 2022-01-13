@@ -45,7 +45,7 @@ exports.SoundcloudHandler = class extends Handler {
 			throw new Error("");
 		}
 
-		const path = id.startsWith("SC") ? `/tracks/${id}.json` : `/resolve.json?url=${id}`;
+		const path = id.startsWith("SC") ? `/tracks/${id.substring(2)}.json` : `/resolve.json?url=${id}`;
 		const token = (await this.getToken()).access_token;
 
 		const response = await super.api(`https://api.soundcloud.com${path}`, {
