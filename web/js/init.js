@@ -1098,25 +1098,6 @@ function populatePlEntry(entry, elem) {
 	if (elem.volat) {
 		entry.addClass("volatile");
 	}
-	$(entry).bind("contextmenu", function (e) {
-		var me = $(this);
-		var cmds = $("body").dialogWindow({
-			title: "Video Options",
-			uid: "videomenu",
-			offset: {
-				top: e.pageY - 5,
-				left: e.pageX - 5
-			},
-			toolBox: true
-		});
-		var optionList = $("<ul/>").addClass("optionList").appendTo(cmds);
-		addVideoControls(me, optionList);
-		if (optionList.children().length == 0) {
-			cmds.window.close();
-		}
-
-		return false;
-	});
 }
 function initRCVOverlay(above) {
 	var overlay = $("<div/>").insertBefore(above).attr('id', 'rcvOverlay');
@@ -1515,6 +1496,26 @@ function initPlaylist(parent) {
 
 	// This looks silly, but it's to avoid double-firing events on reconnect
 	$(window).unbind('keydown', keydownEventHandler).keydown(keydownEventHandler);
+	$(plwrap).on("contextmenu", "li", function (e) {
+		var me = $(this);
+		var cmds = $("body").dialogWindow({
+			title: "Video Options",
+			uid: "videomenu",
+			offset: {
+				top: e.pageY - 5,
+				left: e.pageX - 5
+			},
+			toolBox: true
+		});
+		var optionList = $("<ul/>").addClass("optionList").appendTo(cmds);
+		addVideoControls(me, optionList);
+		if (optionList.children().length == 0) {
+			cmds.window.close();
+		}
+
+		return false;
+	});
+
 
 	newPlaylist(plul);
 }
