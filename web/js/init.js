@@ -260,7 +260,7 @@ function addColorTag(entry, elem) {
 function addTitle(entry, elem) {
 	let title = document.createElement('div');
 
-	title.textContent = decodeURI(elem.videotitle).replace(/&amp;/g, '&');
+	title.textContent = decodeURIComponent(elem.videotitle).replace(/&amp;/g, '&');
 	title.classList.add('title');
 
 	entry[0].append(
@@ -1422,15 +1422,21 @@ function doPlaylistJump(elem) {
 	}
 }
 function newPlaylist(plul) {
+	plul[0].replaceChildren();
 
-	$(plul).children().remove();
 	var elem = PLAYLIST.first;
 	for (var i = 0; i < PLAYLIST.length; i++) {
-		var entry = $("<li/>").appendTo(plul);
-		entry.data('plobject', elem);
-		elem.domobj = entry;
+		let entry = document.createElement('li');
+		let jq = $(entry);
 
-		populatePlEntry(entry, elem);
+		plul[0].append(
+			entry
+		);
+
+		jq.data('plobject', elem);
+		elem.domobj = jq;
+
+		populatePlEntry(jq, elem);
 
 		elem = elem.next;
 	}
