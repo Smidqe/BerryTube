@@ -258,15 +258,24 @@ function addColorTag(entry, elem) {
 	}
 }
 function addTitle(entry, elem) {
-	var title = $("<div/>").appendTo(entry);
-	title.text(decodeURI(elem.videotitle).replace(/&amp;/g, '&'));
-	title.addClass('title');
+	let title = document.createElement('div');
+
+	title.textContent = decodeURI(elem.videotitle).replace(/&amp;/g, '&');
+	title.classList.add('title');
+
+	entry[0].append(
+		title
+	)
 }
 function addTime(entry, elem) {
-	var time = $("<div/>").appendTo(entry);
-	var seconds = elem.videolength;
-	time.text(secToTime(seconds));
-	time.addClass('time');
+	let time = document.createElement('div');
+
+	time.textContent = secToTime(elem.videolength);
+	time.classList.add('time');
+
+	entry[0].append(
+		time
+	)
 }
 function addDelete(entry) {
 	if (canDeleteVideo() && $('> .delete', entry).length == 0) {
