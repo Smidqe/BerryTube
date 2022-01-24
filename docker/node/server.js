@@ -1793,7 +1793,9 @@ io.sockets.on('connection', function (ioSocket) {
 			io, 
 			db: databaseService,
 			playlist: SERVER.PLAYLIST,
-			active: SERVER.ACTIVE
+			active: SERVER.ACTIVE,
+			handlers: VideoHandlers,
+			log: DefaultLog
 		};
 
 		if (!VideoHandlers.has(data.videotype)) {
