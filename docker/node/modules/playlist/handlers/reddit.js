@@ -1,6 +1,4 @@
-const { Video } = require("../video");
 const { Handler } = require("./base");
-const { VideoHandlers } = require("./index")
 
 exports.RedditHandler = class extends Handler {
 	constructor() {
@@ -13,7 +11,7 @@ exports.RedditHandler = class extends Handler {
 		}
 	
 		if (!url.endsWith('/')) {
-			url += '/'
+			url += '/';
 		}
 
 		const json = await super.api(
@@ -24,7 +22,7 @@ exports.RedditHandler = class extends Handler {
 		);
 
 		if (!Array.isArray(json) || json.length < 2) {
-			throw new Error(`Invalid JSON response from reddit url: ${url}`)
+			throw new Error(`Invalid JSON response from reddit url: ${url}`);
 		}
 
 		const videoBlock = json[0]?.data?.children[0]?.data?.media?.reddit_video;
@@ -44,13 +42,13 @@ exports.RedditHandler = class extends Handler {
 		const {result} = await services.db.query(
 			['select videoid from videos where videoid = ?'],
 			[videoid]
-		).catch(() => {return {result: false};});
-
-		if (result) {
-			throw new Error(`Reddit video is already on the playlist: ${videoid}`)
+		).catch(() => false);
+		
+		if (result.length) {
+			throw new Error(`Reddit video is already on the playlist: ${videoid}, res: ${JSON.stringify(result)}`);
 		}
 
-		return VideoHandlers.get("dash").handle(
+		return services.handlers.get("dash").handle(
 			services,
 			{...data, videoid, videotitle}
 		);

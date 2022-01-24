@@ -6,9 +6,9 @@ exports.TwitchHandler = class extends Handler {
 		super();
 	}
 
-	async api(endpoint, sub, params = {}) {
+	async api(endpoint, params = {}) {
 		return super.api(
-			`https://api.twitch.tv/kraken/${endpoint}/${sub}`,
+			`https://api.twitch.tv/kraken/${endpoint}`,
 			{
 				'Accept': 'application/vnd.twitchtv.v5+json',
 				'Client-ID': '16m5lm4sc21blhrrpyorpy4tco0pa9'
@@ -18,7 +18,7 @@ exports.TwitchHandler = class extends Handler {
 	}
 
 	async getVideo(id) {
-		const json = await this.api('videos', id);
+		const json = await this.api(`videos/${id}`);
 
 		let videoid = json._id;
 
@@ -35,7 +35,7 @@ exports.TwitchHandler = class extends Handler {
 	}
 
 	async getChannel(name) {
-		const response = await this.api('search/channels', name, {query: name, limit: 1});
+		const response = await this.api('search/channels', {query: name, limit: 1});
 		
 		if (!response?.channels?.length) {
 			throw new Error(`Channel with name: ${name} doesn't exist`);
@@ -64,7 +64,7 @@ exports.TwitchHandler = class extends Handler {
 		return super.handle(
 			services,
 			data,
-			video
+			await video
 		);
 	}
 };
