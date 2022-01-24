@@ -652,7 +652,7 @@ function showVideoRestrictionDialog(data) {
 		{key: 'restricted', is: data.restricted, canForce: false},
 		{key: 'unembeddable', is: data.noembed, canForce: false},
 		{key: 'ageblock', is: data.ageRestricted, canForce: false},
-		{key: 'geoblock', is: data.countryNames || data.countries, canForce: true},
+		{key: 'geoblock', is: data.geoblock, canForce: true},
 	];
 
 	//get the matched conditions
@@ -675,7 +675,7 @@ function showVideoRestrictionDialog(data) {
 			case 'unembeddable': return "The video you attempted to queue cannot be embedded.";
 			case 'geoblock': {
 				let countryText;
-				const countries = data.countryNames || data.countries;
+				const countries = data.geoblock.countryNames || data.geoblock.countries;
 
 				if (Array.isArray(countries)) {
 					countryText = countries.join(', ');
@@ -686,8 +686,13 @@ function showVideoRestrictionDialog(data) {
 				} else {
 					countryText = countries;
 				}
-		
-				return `The video you attempted to queue is restricted in the following countries: ${countryText}`;
+				
+				if (data.geoblock.kind === 'whitelist') {
+					return `The video you attempted to queue is only visible in these countries: ${countryText}`;
+				} else {
+					return `The video you attempted to queue is restricted in the following countries: ${countryText}`;
+				}
+				
 			}
 			case 'ageblock': return 'Video cannot be queued due it being age restricted.';
 		}
