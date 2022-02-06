@@ -1790,15 +1790,14 @@ io.sockets.on('connection', function (ioSocket) {
 
 		const links = {
 			socket,
-			io, 
-			db: databaseService,
 			playlist: SERVER.PLAYLIST,
 			active: SERVER.ACTIVE,
-			handlers: VideoHandlers,
-			log: DefaultLog
+			...serviceLocator,
 		};
 
-		if (!VideoHandlers.has(data.videotype)) {
+		const handler = VideoHandlers.get(data.videotype);
+
+		if (!handler) {
 			DefaultLog.error(
 				events.EVENT_ADMIN_ADDED_VIDEO,
 				"no handler for {source}",
@@ -1809,7 +1808,7 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
-		await VideoHandlers.get(data.videotype).handle(links, data).then((video) => {
+		await handler.handle(links, data).then((video) => {
 			DefaultLog.info(
 				events.EVENT_ADMIN_ADDED_VIDEO,
 				"{mod} added {provider} video {title}",

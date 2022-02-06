@@ -25,7 +25,7 @@ exports.VimeoHandler = class extends Handler {
 		let response = await this.json(paths[0]).catch(this.json(paths[1]));
 
 		if (!response) {
-			throw new Error("Failed to acquire vimeo video for id");
+			throw new Error("[Vimeo]: Failed to acquire vimeo video for id");
 		}
 
 		if (Array.isArray(response)) {

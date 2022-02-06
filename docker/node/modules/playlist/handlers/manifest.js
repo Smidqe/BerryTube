@@ -13,21 +13,23 @@ exports.ManifestHandler = class extends Handler {
 		const manifest = sanitizeManifest(response);
 
 		if (manifest.sources.length === 0) {
-			throw new Error("manifest must have one or more sources specified");
+			throw new Error("[Manifest]: Manifest must have one or more sources specified");
 		}
+
+		const video = new Video({
+			videoid: manifestUrl,
+			videotitle: manifest.title,
+			videolength: manifest.duration,
+			videotype: "file",
+			meta: {
+				manifest
+			},
+		});
 
 		return super.handle(
 			links,
 			data,
-			new Video({
-				videoid: manifestUrl,
-				videotitle: manifest.title,
-				videolength: manifest.duration,
-				videotype: "file",
-				meta: {
-					manifest
-				},
-			})
+			video
 		);
 	}
 };

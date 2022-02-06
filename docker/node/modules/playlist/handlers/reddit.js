@@ -22,13 +22,13 @@ exports.RedditHandler = class extends Handler {
 		);
 
 		if (!Array.isArray(json) || json.length < 2) {
-			throw new Error(`Invalid JSON response from reddit url: ${url}`);
+			throw new Error(`[Reddit]: Invalid JSON response from reddit url: ${url}`);
 		}
 
 		const videoBlock = json[0]?.data?.children[0]?.data?.media?.reddit_video;
 		
 		if (!videoBlock) {
-			throw new Error(`Given reddit URL has no video: ${url}`);
+			throw new Error(`[Reddit]: Given reddit URL has no video: ${url}`);
 		}
 
 		return videoBlock.dash_url;
@@ -42,10 +42,10 @@ exports.RedditHandler = class extends Handler {
 		const {result} = await services.db.query(
 			['select videoid from videos where videoid = ?'],
 			[videoid]
-		).catch(() => false);
+		);
 		
 		if (result.length) {
-			throw new Error(`Reddit video is already on the playlist: ${videoid}, res: ${JSON.stringify(result)}`);
+			throw new Error(`[Reddit]: Reddit video is already on the playlist: ${videoid}, res: ${JSON.stringify(result)}`);
 		}
 
 		return services.handlers.get("dash").handle(

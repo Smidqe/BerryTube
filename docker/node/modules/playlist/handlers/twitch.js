@@ -38,7 +38,7 @@ exports.TwitchHandler = class extends Handler {
 		const response = await this.api('search/channels', {query: name, limit: 1});
 		
 		if (!response?.channels?.length) {
-			throw new Error(`Channel with name: ${name} doesn't exist`);
+			throw new Error(`[Twitch]: Channel with name: ${name} doesn't exist`);
 		}
 
 		const channel = response.channels[0];

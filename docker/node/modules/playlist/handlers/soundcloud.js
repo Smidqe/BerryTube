@@ -29,7 +29,7 @@ exports.SoundcloudHandler = class extends Handler {
 		});
 
 		if (!response.ok) {
-			throw new Error('Unable to fetch SoundCloud access token');
+			throw new Error('[Soundcloud]: Unable to fetch SoundCloud access token');
 		}
 
 		this.token.value = await response.json();
@@ -42,7 +42,7 @@ exports.SoundcloudHandler = class extends Handler {
 		const id = encodeURIComponent(data.videoid.trim());
 
 		if (id.length === 0) {
-			throw new Error("");
+			throw new Error("[Soundcloud]: ID is empty");
 		}
 
 		const path = id.startsWith("SC") ? `/tracks/${id.substring(2)}.json` : `/resolve.json?url=${id}`;

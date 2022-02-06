@@ -1,5 +1,6 @@
 const { Video } = require("../video");
 const { Handler } = require("./base");
+const fetch = require('node-fetch');
 
 exports.HLSHandler = class extends Handler {
 	constructor() {
@@ -7,6 +8,18 @@ exports.HLSHandler = class extends Handler {
 	}
 
 	async handle(links, data) {
-		throw new Error("Not implemented yet");
+		const video = new Video({
+			videoid: data.videoid,
+			videotitle: data.videotitle,
+			videolength: 0,
+			videotype: "live",
+			meta: {},
+		});
+
+		return super.handle(
+			links,
+			data,
+			video
+		);
 	}
 };

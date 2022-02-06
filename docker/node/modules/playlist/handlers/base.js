@@ -13,7 +13,7 @@ exports.Handler = class {
 		});
 
 		if (!response.ok) {
-			throw new Error(`Failed to get response from ${url}: ${response.status}`);
+			throw new Error(`[api]: Failed to get response from ${url}: ${response.status}`);
 		}
 
 		return response.json();
@@ -39,6 +39,12 @@ exports.Handler = class {
 				//ignore non object meta (will be overwriten)
 			}
 		}
+
+		//wasteful, but remove the queued video from videos_history
+		await services.db.query(
+			[`delete from videos_history where videoid = ?`],
+			[video.id()]
+		);
 
 		await services.db.query(
 			[`insert into ${config.video_table} (position, videoid, videotitle, videolength, videotype, videovia, meta) VALUES (?,?,?,?,?,?,?);`],

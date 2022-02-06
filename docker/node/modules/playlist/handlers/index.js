@@ -3,9 +3,8 @@ const { SoundcloudHandler } = require("./soundcloud");
 const { VimeoHandler } = require("./vimeo");
 const { YoutubeHandler } = require("./youtube");
 const { RedditHandler } = require("./reddit");
-
 const { DashHandler } = require("./dash");
-//const { HLSHandler } = require("./hls");
+const { HLSHandler } = require("./hls");
 const { FileHandler } = require("./file");
 const { ManifestHandler } = require("./manifest");
 const { TwitchHandler } = require("./twitch");
@@ -18,7 +17,7 @@ exports.VideoHandlers = new Map([
 	['soundcloud', new SoundcloudHandler()],
 	['reddit', new RedditHandler()],
 	['dash', new DashHandler()],
-	//['hls', new HLSHandler()],
+	['hls', new HLSHandler()],
 	['file', new FileHandler()],
 	['manifest', new ManifestHandler()],
 	['twitch', new TwitchHandler()],

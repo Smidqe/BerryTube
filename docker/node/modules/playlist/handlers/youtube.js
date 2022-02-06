@@ -74,7 +74,7 @@ exports.YoutubeHandler = class extends Handler {
 
 		if (!data.force && Object.values(restrictions).some(value => typeof value !== "boolean" || value)) {
 			links.socket.emit("videoRestriction", restrictions);
-			throw new Error(`Youtube: Video: ${data.videoid} has restrictions`);
+			throw new Error(`[Youtube]: Video ${data.videoid} has visibility restrictions`);
 		}
 
 		return super.handle(

@@ -15,6 +15,10 @@ exports.DailymotionHandler = class extends Handler {
 			}
 		);
 
+		if (!json) {
+			throw new Error("[Dailymotion]: No response from API or it was malformed");
+		}
+
 		return super.handle(
 			services,
 			data,
