@@ -1,6 +1,5 @@
 const { Video } = require("../video");
 const { Handler } = require("./base");
-const fetch = require('node-fetch');
 
 exports.HLSHandler = class extends Handler {
 	constructor() {
