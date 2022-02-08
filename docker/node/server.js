@@ -1986,7 +1986,7 @@ io.sockets.on('connection', function (ioSocket) {
 		data = data.info;
 
 		switch (action) {
-			case "setVolatile": setVideoVolatile(socket, elem, data.volat);
+			case "setVolatile": setVideoVolatile(socket, elem, data.volat); break;
 			case "setColorTag": setVideoColorTag(socket, elem, data.pos, data.tag, data.volat); break;
 			default: 
 				return;
