@@ -428,7 +428,7 @@ function playNext() {
 	SERVER.ACTIVE = SERVER.ACTIVE.next;
 
 	if (!active.node.volat && 'colorTagVolat' in active.node.meta) {
-		_setVideoColorTag(active.node, active.position, false, false);
+		setVideoColorTag(active.node, active.position, false, false);
 	}
 
 	if (active.node.volat) {
@@ -1714,7 +1714,7 @@ io.sockets.on('connection', function (ioSocket) {
 		}
 
 		if (!prev.node.volat && 'colorTagVolat' in prev.node.meta) {
-			_setVideoColorTag(prev.node, prev.position, false, false);
+			setVideoColorTag(prev.node, prev.position, false, false);
 		}
 	
 		SERVER.ACTIVE = next.node;
@@ -1976,7 +1976,7 @@ io.sockets.on('connection', function (ioSocket) {
 			kickForIllegalActivity(socket);
 			return;
 		}
-		
+
 		const action = data.action;
 		const mappings = new Map([
 			['setColorTag', 'setVidColorTag'],
