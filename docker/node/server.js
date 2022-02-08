@@ -736,49 +736,24 @@ function applyPluginFilters(msg, socket) {
 
 	return msg;
 }
-function setVideoVolatile(socket, pos, isVolat) {
-	var elem = SERVER.PLAYLIST.first;
-	for (var i = 0; i < pos; i++) {
-		elem = elem.next;
-	}
-	elem.volat = isVolat;
+function setVideoVolatile(socket, video, isVolat) {
+	video.setVolatile(isVolat);
 
 	DefaultLog.info(events.EVENT_ADMIN_SET_VOLATILE,
 		"{mod} set {title} to {status}",
-		{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(elem.title()), status: isVolat ? "volatile" : "not volatile" });
-
-	io.sockets.emit("setVidVolatile", {
-		pos: pos,
-		volat: isVolat
-	});
+		{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()), status: isVolat ? "volatile" : "not volatile" });
 }
-function setVideoColorTag(pos, tag, volat) {
-	var elem = SERVER.PLAYLIST.first;
-	for (var i = 0; i < pos; i++) {
-		elem = elem.next;
-	}
-	_setVideoColorTag(elem, pos, tag, volat);
-}
-function _setVideoColorTag(elem, pos, tag, volat) {
-
-	if (tag == false) {
-		delete elem.meta.colorTag;
-	} else {
-		elem.meta.colorTag = tag;
-	}
-
-	/*
+function setVideoColorTag(socket, elem, tag, volat) {
 	if (!tag) {
-		video.deleteTag(!volat)
+		elem.removeTag(false);
 	} else {
-		video.setTag(tag, volat)
+		elem.setTag(tag, false);
 	}
-	*/
 
 	if (volat != true) {
-		delete elem.meta.colorTagVolat;
+		elem.removeTag(false);
 	} else {
-		elem.meta.colorTagVolat = volat;
+		elem.setTag(true, false);
 	}
 
 	var sql = 'update ' + SERVER.dbcon.video_table + ' set meta = ? where videoid = ?';
@@ -787,11 +762,6 @@ function _setVideoColorTag(elem, pos, tag, volat) {
 			DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
 			return;
 		}
-	});
-	io.sockets.emit("setVidColorTag", {
-		pos: pos,
-		tag: tag,
-		volat: volat
 	});
 }
 
@@ -1997,33 +1967,32 @@ io.sockets.on('connection', function (ioSocket) {
 		for (var i = 0; i < data.info.pos; i++) {
 			elem = elem.next;
 		}
-		if (data.sanityid && elem.id() != data.sanityid) { return doorStuck(socket); }
 
-		if ("action" in data) {
-			if (data.action == "setVolatile") {
-				data = data.info; // Drop action name.
-				if (!authService.can(socket.session, actions.ACTION_SET_VIDEO_VOLATILE)) {
-					kickForIllegalActivity(socket);
-					return;
-				}
-
-				pos = data.pos;
-				isVolat = data.volat;
-				setVideoVolatile(socket, pos, isVolat);
-			}
-			if (data.action == "setColorTag") {
-				data = data.info; // Drop action name.
-				if (!authService.can(socket.session, actions.ACTION_SET_VIDEO_VOLATILE)) {
-					kickForIllegalActivity(socket);
-					return;
-				}
-
-				pos = ("pos" in data ? data.pos : 0);
-				tag = ("tag" in data ? data.tag : false);
-				volat = ("volat" in data ? data.volat : false);
-				setVideoColorTag(pos, tag, volat);
-			}
+		if (data.sanityid && elem.id() !== data.sanityid) { 
+			return doorStuck(socket); 
 		}
+
+		if (!authService.can(socket.session, actions.ACTION_SET_VIDEO_VOLATILE)) {
+			kickForIllegalActivity(socket);
+			return;
+		}
+		
+		const action = data.action;
+		const mappings = new Map([
+			['setColorTag', 'setVidColorTag'],
+			['setVolatile', 'setVidVolatile'],
+		]);
+
+		data = data.info;
+
+		switch (action) {
+			case "setVolatile": setVideoVolatile(socket, elem, data.volat);
+			case "setColorTag": setVideoColorTag(socket, elem, data.pos, data.tag, data.volat); break;
+			default: 
+				return;
+		}
+
+		io.sockets.emit(mappings.get(action), data);
 	});
 	socket.on("fondleUser", function (data) {
 		if ("action" in data) {
