@@ -1,5 +1,6 @@
 const { Video } = require("../video");
 const { Handler } = require("./base");
+const fetch = require('node-fetch');
 
 exports.SoundcloudHandler = class extends Handler {
 	constructor() {
