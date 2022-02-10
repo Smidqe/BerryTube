@@ -1963,12 +1963,9 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("fondleVideo", function (data) {
 		// New abstraction for messing with video details
-		var elem = SERVER.PLAYLIST.first;
-		for (var i = 0; i < data.info.pos; i++) {
-			elem = elem.next;
-		}
+		const video = getVideoAt(data.info.pos).node;
 
-		if (data.sanityid && elem.id() !== data.sanityid) { 
+		if (data.sanityid && video.id() !== data.sanityid) { 
 			return doorStuck(socket); 
 		}
 
@@ -1986,8 +1983,8 @@ io.sockets.on('connection', function (ioSocket) {
 		data = data.info;
 
 		switch (action) {
-			case "setVolatile": setVideoVolatile(socket, elem, data.volat); break;
-			case "setColorTag": setVideoColorTag(socket, elem, data.pos, data.tag, data.volat); break;
+			case "setVolatile": setVideoVolatile(socket, video, data.volat); break;
+			case "setColorTag": setVideoColorTag(socket, video, data.pos, data.tag, data.volat); break;
 			default: 
 				return;
 		}
