@@ -1388,10 +1388,9 @@ function addChatMsg(data, _to) {
 			var name = $("<span/>").addClass("timestamp").prependTo(newmsg).text("<" + h + ":" + m + ":" + s + ">");
 		}
 
-		scrollBuffersToBottom();
-
 		if (!isGhost) {
 			notifyNewMsg(metadata.channel, isSquee, data.msg.emote == "rcv");
+			scrollBuffersToBottom();
 		}
 	});
 }
@@ -1411,45 +1410,26 @@ function doSqueeNotify() {
 		}, 1000);
 	}
 }
-function manageDrinks(dd) {
-	whenExists("#drinkCounter", function (dc) {
-		whenExists("#drinkWrap", function (dw) {
-			whenExists("#v", function (v) {
-				if (dd == 0) {
-					if (dw.is(":visible")) {
-						dw.hide("blind");
-					}
-				} else {
-					if (dw.is(":hidden")) {
-						dw.show("blind");
-					}
-				}
 
-				if (dd > 9000) {
-					if (v.is(":hidden")) {
-						v.show();
-					}
-				}
-				if (dd <= 9000) {
-					if (v.is(":visible")) {
-						v.hide();
-					}
-				}
+function manageDrinks(drinks) {
+	//once #v exists so does #drinkCounter and #drinkWrap
+	whenExists('#drinkWrap > #v', (v) => {
+		const wrap = v[0].parentElement;
+		const counter = wrap.querySelector('#drinkCounter');
+		
+		wrap.style.display = drinks === 0 ? 'none' : 'block';
+		v[0].style.display = drinks > 9000 ? 'block' : 'none';
 
-				//console.log(dd);
-				if (dd && dd != DRINKS) { // Added a drink
-					if (getStorage("drinkNotify") == 1) {
-						DRINK.play();
-					}
-				}
+		//added drink(s)
+		if (drinks && drinks !== DRINKS && getStorage('drinkNotify')) {
+			DRINK.play();
+		}
 
-				DRINKS = dd;
-				dc.text(DRINKS);
-				//console.log(DRINKS);
-			});
-		});
+		DRINKS = drinks;
+		counter.textContent = DRINKS;
 	});
 }
+
 function handleNumCount(data) {
 	CONNECTED = data.num;
 	var name = 'connectedCount';
