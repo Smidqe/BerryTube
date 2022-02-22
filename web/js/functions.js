@@ -811,26 +811,35 @@ function windowHidden() {
 
 }
 function addZero(i) {
-	return `${i < 10 ? '0' : ''}${i}`
+	if (i < 10) {
+		i = "0" + i.toString();
+	} else {
+		i = i.toString();
+	}
+	return i;
 }
 function secToTime(seconds) {
 	if (seconds <= 0) {
-		return '- - : - -';
-	} 
-
-	const parts = [
-		Math.floor(seconds / 3600),
-		Math.floor(seconds % 3600 / 60),
-		Math.floor(seconds % 60),
-	];
-
-	if (parts[0] === 0) {
-		parts.shift();
+		return "- - : - -";
 	}
 
-	return parts
-		.map(val => addZero(val))
-		.join(':');
+	var minutes = 0;
+	var hours = 0;
+
+	minutes = Math.floor(seconds / 60);
+	seconds = Math.floor(seconds % 60);
+	hours = Math.floor(minutes / 60);
+	minutes = Math.floor(minutes % 60);
+
+	seconds = addZero(seconds);
+	minutes = addZero(minutes);
+
+	var disp = minutes + ":" + seconds;
+	if (hours > 0) {
+		hours = addZero(hours);
+		disp = hours + ":" + disp;
+	}
+	return disp;
 }
 function setNick(nick) {
 	NAME = nick;
@@ -2022,27 +2031,22 @@ function setVidColorTag(pos, tag, volat) {
 	_setVidColorTag(elem.domobj, tag, volat);
 }
 function _setVidColorTag(domobj, tag, volat) {
-	var ct = domobj[0].querySelector(".colorTag");
-	if (!ct) {
-		ct = document.createElement('div');
-		ct.classList.add('colorTag');
-
-		domobj[0].prepend(
-			ct
-		);
+	var ct = $(domobj).find(".colorTag");
+	if (!ct.length) {
+		ct = $("<div/>").addClass("colorTag").prependTo(domobj);
 	}
 
 	if (volat) {
-		ct.classList.add("volatile");
+		ct.addClass("volatile");
 	} else {
-		ct.classList.remove("volatile");
+		ct.removeClass("volatile");
 	}
 
 	if (tag == false) {
 		ct.remove();
 	} else {
-		ct.classList.remove('shitpost-flag');
-		ct.style.backgroundImage = 'none';
+		ct.removeClass('shitpost-flag');
+		ct.css('background-image', 'none');
 
 		let parts = tag.split('/');
 		if (parts.length === 1 && parts[0] === 'euro') {
@@ -2051,11 +2055,11 @@ function _setVidColorTag(domobj, tag, volat) {
 
 		switch (parts[0]) {
 			case 'flag':
-				ct.classList.add('shitpost-flag');
-				ct.style.backgroundImage = 'url(' + CDN_ORIGIN + '/images/famflags/' + parts[1].replace(/\.\//g, '') + '.png';
+				ct.addClass('shitpost-flag');
+				ct.css('background-image', 'url(' + CDN_ORIGIN + '/images/famflags/' + parts[1].replace(/\.\//g, '') + '.png');
 				break;
 			default:
-				ct.style.backgroundColor = tag;
+				ct.css("background-color", tag);
 				break;
 		}
 	}
@@ -2448,22 +2452,18 @@ function highlight(elem) {
 	$(elem).effect("highlight", {}, 1000);
 }
 function scrollToPlEntry(index) {
-	let playlist = document.querySelector('#playlist');
-	let list = playlist.querySelector('ul');
-	
-
-	let element = list.children[index];
-	let heights = [
-		'.overview',
-		'.viewport'
-	].map(h => parseInt(window.getComputedStyle(playlist.querySelector(h)).getPropertyValue('height').replace("px", ""), 10));
-
-	let scrollbar = $(playlist).data("plugin_tinyscrollbar");
-	if (element.offsetTop + heights[1] > heights[0]) {
-		scrollbar.update("bottom");
-	} else {
-		scrollbar.update(element.offsetTop)
-	}
+	var scrollbar = $('#playlist').data("plugin_tinyscrollbar");
+	try {
+		var t = $("#playlist ul").children(":not(.search-hidden)")[index];
+		var vph = $("#playlist .overview").height();
+		var plh = $("#playlist .viewport").height();
+		var o = $(t).position().top;
+		if (o + plh > vph) {
+			scrollbar.update("bottom");
+		} else {
+			scrollbar.update(o);
+		}
+	} catch (e) { }
 }
 function smartRefreshScrollbar() {
 	try {
