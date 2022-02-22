@@ -249,7 +249,7 @@ socket.on("newChatList", function (data) {
 });
 socket.on("userJoin", function (data) {
 	dbg('JOIN'); dbg(data);
-	addUser(data, true);
+	addUser(data, true, true);
 });
 socket.on("fondleUser", function (data) {
 	switch (data.action) {

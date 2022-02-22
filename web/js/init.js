@@ -877,14 +877,21 @@ function showEditNote(nick) {
 
 	parent.window.center();
 }
-function addUser(data, sortafter) {
+function addUser(data, sortafter, animate = false) {
 	whenExists('#chatlist ul', function (chatul) {
 		var nick = data.nick;
 		var type = data.type;
 		var shadowbanned = data.shadowbanned;
 		var ip = ((TYPE >= 1 && data.meta !== undefined) ? data.meta.ip : false);
 
-		var newusr = $('<li/>').append($('<span/>').addClass('chatlistname').text(nick)).data('nick', nick).show("blind").appendTo(chatul).attr('nick', nick);
+		let newusr = $('<li/>').append($('<span/>').addClass('chatlistname').text(nick)).data('nick', nick);
+
+		if (animate) {
+			newusr.show("blind")
+		}
+	
+		newusr.appendTo(chatul).attr('nick', nick);
+
 		if (nick == NAME) {
 			newusr.addClass("me");
 		} else if (IGNORELIST.indexOf(nick) != -1) {
