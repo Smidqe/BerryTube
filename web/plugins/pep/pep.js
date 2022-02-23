@@ -453,15 +453,17 @@ addVideoControls = function(entry,optionList){
   PEP.oldAVC(entry,optionList);
 };
 
-PEP.oldpoppl = populatePlEntry;
-populatePlEntry = function(entry,elem){
-  PEP.oldpoppl(entry,elem);
-  if(PEP.alarms[elem.videoid] !== undefined){
-    if(PEP.alarms[elem.videoid].alert == 1)
-      $(entry).addClass('alarm once');
-    if(PEP.alarms[elem.videoid].alert == 2)
-      $(entry).addClass('alarm');
+PEP.oldpoppl = createPlaylistItem;
+createPlaylistItem = function(data){
+  let item = PEP.oldpoppl(data);
+  if(PEP.alarms[data.videoid] !== undefined){
+    if(PEP.alarms[data.videoid].alert == 1)
+      $(item).addClass('alarm once');
+    if(PEP.alarms[data.videoid].alert == 2)
+      $(item).addClass('alarm');
   }
+
+  return item;
 };
 
 PEP.oldspp = setPlaylistPosition;

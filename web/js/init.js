@@ -250,88 +250,33 @@ try {
 	console.error(e);
 }
 
-function addColorTag(entry, elem) {
-	if ("colorTag" in elem.meta) {
-		var v = false;
-		if ("colorTagVolat" in elem.meta) { v = elem.meta.colorTagVolat; }
-		_setVidColorTag(entry, elem.meta.colorTag, v);
-	}
-}
-function addTitle(entry, elem) {
-	let title = document.createElement('div');
-
-	title.textContent = decodeURIComponent(elem.videotitle).replace(/&amp;/g, '&');
-	title.classList.add('title');
-
-	entry[0].append(
-		title
-	)
-}
-function addTime(entry, elem) {
-	let time = document.createElement('div');
-
-	time.textContent = secToTime(elem.videolength);
-	time.classList.add('time');
-
-	entry[0].append(
-		time
-	)
-}
-function addDelete(entry) {
-	if (canDeleteVideo() && $('> .delete', entry).length == 0) {
-		var delbtn = $("<div/>").appendTo(entry);
-		delbtn.text("X");
-		delbtn.addClass('delete');
-		delbtn.confirmClick(function () {
-			doDelete(entry);
-		});
-		delbtn.mousedown(function (e) {
-			e.stopPropagation();
-			e.preventDefault();
-		});
-	}
-}
 function doDelete(entry) {
 	if (canDeleteVideo()) {
-		var index = $(entry).index();
-		var id = $(entry).data('plobject').videoid;
+		var index = entry.index();
+		var id = entry.data('plobject').videoid;
 		var data = { index: index, sanityid: id };
 		dbg("delVideo", data);
 		socket.emit("delVideo", data);
 	}
 }
-function addRequeue(entry) {
-	if (controlsPlaylist() && $('> .requeue', entry).length == 0) {
-		var qbtn = $("<div/>").appendTo(entry);
-		qbtn.text("Q");
-		qbtn.addClass('requeue');
-		qbtn.click(function () {
-			doRequeue(entry);
-		});
-		qbtn.mousedown(function (e) {
-			e.stopPropagation();
-			e.preventDefault();
-		});
-	}
-}
+
 function doRequeue(entry) {
 	if (getVal("sorting") == true) { return; }
 	setVal("sorting", true);
 	console.log("Called doRequeue()");
 	if (controlsPlaylist()) {
-		var from = $(entry).index();
+		var from = entry.index();
 		var to = ACTIVE.domobj.index();
-		var id = $(entry).data('plobject').videoid;
+		var id = entry.data('plobject').videoid;
 
 		if (from > to) { to++; }
 
-		var data = {
-			from: from,
-			to: to,
-			sanityid: id
-		};
 		dbg(data);
-		socket.emit("sortPlaylist", data);
+		socket.emit("sortPlaylist", {
+			from,
+			to,
+			sanityid: id
+		});
 	}
 	setVal("sorting", false);
 }
@@ -347,9 +292,9 @@ function addVolatile(entry) {
 }
 function doVolatile(entry) {
 	if (canToggleVolatile()) {
-		var pos = $(entry).index();
+		var pos = entry.index();
 		var volat = true;
-		var id = $(entry).data('plobject').videoid;
+		var id = entry.data('plobject').videoid;
 		if (entry.hasClass("volatile")) {
 			volat = false;
 		}
@@ -403,7 +348,7 @@ function sortUserList() {
 		const grouped = groups.map((selector) => {
 			return list.find(selector).not('.me').sort((a, b) => {
 				//get uppercase nicks of users being compared
-				const nicks = [a, b].map(user => $(user).data('nick').toUpperCase());
+				const nicks = [a, b].map(user => $.data(user, 'nick').toUpperCase());
 				
 				return nicks[0].localeCompare(nicks[1]);
 			});
@@ -1093,19 +1038,7 @@ function addVideoControls(entry, optionList) {
 		$("<div/>").css("clear", "both").appendTo(colorGrid);
 	}
 }
-function populatePlEntry(entry, elem) {
-	addColorTag(entry, elem);
-	
-	addTitle(entry, elem);
-	addTime(entry, elem);
-	
-	addRequeue(entry);
-	addDelete(entry);
-	
-	if (elem.volat) {
-		entry.addClass("volatile");
-	}
-}
+
 function initRCVOverlay(above) {
 	var overlay = $("<div/>").insertBefore(above).attr('id', 'rcvOverlay');
 
@@ -1428,28 +1361,81 @@ function doPlaylistJump(elem) {
 		socket.emit("forceVideoChange", { index: index, sanityid: id });
 	}
 }
+function createQueueButton(entry) {
+	let element = createElement('div', {text: 'Q', class: 'requeue'});
+
+	element.onclick = () => doRequeue($(entry));
+	element.onmousedown = (e) => {
+		e.stopPropagation();
+		e.preventDefault();
+	};
+
+	return element;
+}
+function createDeleteButton(entry) {
+	let element = createElement('div', {text: 'X', class: 'delete'});
+
+	$(element).confirmClick(() => doDelete($(entry)));
+	
+	element.onmousedown = (e) => {
+		e.stopPropagation();
+		e.preventDefault();
+	};
+
+	return element;
+}
+
+function createPlaylistItem(data) {
+	const item = createElement('li');
+	
+	if (data.meta.colorTag) {
+		_setVidColorTag(item, data.meta.colorTag, data.meta.colorTagVolat || false);
+	}
+
+	item.append(
+		createElement('div', {class: 'title', text: decodeURIComponent(data.videotitle).replace(/&amp;/g, '&')}),
+		createElement('div', {class: 'time', text: secToTime(data.videolength)}),
+	);
+
+	if (controlsPlaylist()) {
+		item.append(
+			createQueueButton(item)
+		);
+	}
+
+	if (canDeleteVideo()) {
+		item.append(
+			createDeleteButton(item)
+		);
+	}
+
+	if (data.volat) {
+		item.classList.add('volatile');
+	}
+
+	return item;
+}
+
 function newPlaylist(plul) {
 	plul[0].replaceChildren();
 
 	var elem = PLAYLIST.first;
 	for (var i = 0; i < PLAYLIST.length; i++) {
-		let entry = document.createElement('li');
-		let jq = $(entry);
+		let entry = createPlaylistItem(elem);
 
+		elem.domobj = $(entry);
+		elem.domobj.data('plobject', elem);
+		
 		plul[0].append(
 			entry
 		);
-
-		jq.data('plobject', elem);
-		elem.domobj = jq;
-
-		populatePlEntry(jq, elem);
 
 		elem = elem.next;
 	}
 	dbg(PLAYLIST.first.videolength);
 	recalcStats();
 }
+
 function initPlaylist(parent) {
 
 	$("#playlist").remove();
@@ -1476,14 +1462,15 @@ function initPlaylist(parent) {
 	var searchArea = $('<div/>').appendTo(plwrap).attr('id', 'searchbox');
 	var videoSearch = $('<input/>').appendTo(searchArea);
 	videoSearch.keyup(function (e) {
+		clearTimeout(getVal("searchTime"));
+
 		if (e.keyCode == 13) {
-			clearInterval(getVal("searchTime"));
 			videoSearch.submit();
 		} else {
-			clearInterval(getVal("searchTime"));
 			var x = setTimeout(function () {
 				videoSearch.submit();
 			}, 1000);
+
 			setVal("searchTime", x);
 		}
 	});
@@ -1570,25 +1557,26 @@ function keydownEventHandler(event) {
 }
 
 function initFlairOpts() {
-	var i = 0;
-	for (var i = 0; i < 12; i++) {
-		FLAIR_OPTS.push($('<div/>').addClass("drinkflair").addClass("flair_" + i).data('flair_id', i));
-	}
-	// Manual title settings
-	i = 0;
-	FLAIR_OPTS[i++].attr('title', 'No Booze :C');
-	FLAIR_OPTS[i++].attr('title', 'Wine');
-	FLAIR_OPTS[i++].attr('title', 'Cocktail');
-	FLAIR_OPTS[i++].attr('title', 'Cider');
-	FLAIR_OPTS[i++].attr('title', 'Liquor');
-	FLAIR_OPTS[i++].attr('title', 'Liquor');
-	FLAIR_OPTS[i++].attr('title', 'Beer');
-	FLAIR_OPTS[i++].attr('title', 'Green');
-	FLAIR_OPTS[i++].attr('title', 'Water');
-	FLAIR_OPTS[i++].attr('title', 'Coffee');
-	FLAIR_OPTS[i++].attr('title', 'Sparkling Water');
-	FLAIR_OPTS[i++].attr('title', 'Tea');
+	const flairs = [
+		'No Booze :C',
+		'Wine',
+		'Cocktail',
+		'Cider',
+		'Liquor',
+		'Liquor',
+		'Beer',
+		'Green',
+		'Water',
+		'Coffee',
+		'Sparkling Water',
+		'Tea'
+	];
+
+	FLAIR_OPTS = flairs.map((flair, index) => {
+		return $('<div>', {class: `drinkflair flair_${index}`, title: flair}).data('flair_id', index);
+	});
 }
+
 function initChatControls(parent) {
 	$("#chatControls").remove();
 

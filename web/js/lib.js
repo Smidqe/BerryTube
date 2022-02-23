@@ -337,3 +337,24 @@ function onceFunction(fn) {
 		}
 	};
 }
+
+function createElement(kind, attrs = {}, ...children) {
+	const element = document.createElement(kind);
+	
+	if (attrs.text) {
+		element.textContent = attrs.text;
+		delete attrs.text;
+	}
+
+	Object.entries(attrs).forEach(([key, value]) =>
+		element.setAttribute(key, value)
+	);
+
+	if (children.length > 0) {
+		element.append(
+			...children
+		);
+	}
+
+	return element;
+};
