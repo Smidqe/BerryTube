@@ -271,7 +271,6 @@ function doRequeue(entry) {
 
 		if (from > to) { to++; }
 
-		dbg(data);
 		socket.emit("sortPlaylist", {
 			from,
 			to,
