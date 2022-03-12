@@ -2452,7 +2452,6 @@ function smartRefreshScrollbar() {
 		var scrollPos = parseInt(overview.css("top")); //this is the slowest part
 		var listHeight = overview.height();
 		var viewportHeight = viewport.height();
-		playlist.tinyscrollbar();
 
 		var scrollbar = playlist.data("plugin_tinyscrollbar");
 		if (scrollPos + listHeight <= viewportHeight) {

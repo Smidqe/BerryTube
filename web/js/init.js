@@ -1515,7 +1515,8 @@ function initPlaylist(parent) {
 		return false;
 	});
 
-
+	//initialise here
+	plwrap.tinyscrollbar();
 	newPlaylist(plul);
 }
 
