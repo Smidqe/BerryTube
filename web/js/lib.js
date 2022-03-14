@@ -345,10 +345,10 @@ syntax, with minor differences. But vanilla javascript is superior :P
 function createElement(kind, attrs = {}, ...children) {
 	const element = document.createElement(kind);
 
-	for (const [key, value] of Object.keys(attrs)) {
+	for (const [key, value] of Object.entries(attrs)) {
 		switch (key) {
 			case 'text': element.textContent = value; break;
-			case 'html': element.innerHtml = value; break;
+			case 'html': element.innerHTML = value; break;
 			default:
 				element.setAttribute(key, value);
 		}
