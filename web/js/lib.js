@@ -338,17 +338,21 @@ function onceFunction(fn) {
 	};
 }
 
+/*
+This function is meant to be an somewhat of an replacement to jQuery's $('<element>')
+syntax, with minor differences. But vanilla javascript is superior :P
+*/
 function createElement(kind, attrs = {}, ...children) {
 	const element = document.createElement(kind);
-	
-	if (attrs.text) {
-		element.textContent = attrs.text;
-		delete attrs.text;
-	}
 
-	Object.entries(attrs).forEach(([key, value]) =>
-		element.setAttribute(key, value)
-	);
+	for (const [key, value] of Object.keys(attrs)) {
+		switch (key) {
+			case 'text': element.textContent = value; break;
+			case 'html': element.innerHtml = value; break;
+			default:
+				element.setAttribute(key, value);
+		}
+	}
 
 	if (children.length > 0) {
 		element.append(
