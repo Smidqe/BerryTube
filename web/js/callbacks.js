@@ -42,7 +42,7 @@ socket.on("createPlayer", function (data) {
 	const isNew = ACTIVE.videoid != data.video.videoid;
 
 	unfuckPlaylist();
-	setPlaylistPosition(data);
+	setPlaylistPosition(data, true);
 
 	// avoid skipping on socket reconnects, by not reloading current video
 	if (isNew) {
@@ -50,7 +50,7 @@ socket.on("createPlayer", function (data) {
 	}
 });
 socket.on("renewPos", function (data) {
-	setPlaylistPosition(data);
+	setPlaylistPosition(data, true);
 });
 socket.on("recvNewPlaylist", function (data) {
 	PLAYLIST = new LinkedList.Circular();
@@ -62,11 +62,11 @@ socket.on("recvNewPlaylist", function (data) {
 });
 socket.on("recvPlaylist", function (data) {
 	PLAYLIST = new LinkedList.Circular();
-	for (var i in data) {
-		PLAYLIST.append(data[i]);
+	for (const video of data) {
+		PLAYLIST.append(video);
 	}
 	whenExists("#leftpane", function (obj) {
-		initPlaylist($(obj));
+		initPlaylist(obj);
 		setVal("PLREADY", true);
 	});
 });
@@ -140,17 +140,16 @@ socket.on("badAdd", function () {
 	revertLoaders();
 });
 socket.on("setAreas", function (data) {
-	for (var i = 0; i < data.length; i++) {
-		(function (i) {
-			var name = data[i].name;
-			var html = data[i].html;
-			var selName = "#dyn_" + name;
-			whenExists(selName, function (area) {
-				area.html(html);
-				$("a:not([rel])", area).attr("rel", "noopener noreferrer");
-				$("img:not([alt])", area).attr("alt", "");
-			});
-		})(i);
+	for (const area of data) {
+		whenExists(`#dyn_${area.name}`, (a) => {
+			a[0].innerHTML = area.html;
+			a[0].querySelectorAll('a:not([rel])').forEach(
+				n => n.setAttribute('rel', 'noopener noreferrer')
+			);
+			a[0].querySelectorAll('img:not([alt])').forEach(
+				n => n.setAttribute('alt', '')
+			);
+		})
 	}
 });
 socket.on("addVideo", function (data) {
@@ -159,27 +158,26 @@ socket.on("addVideo", function (data) {
 });
 socket.on("addPlaylist", function (data) {
 	dbg(data);
-	var vs = data.videos;
-	for (var i = 0; i < vs.length; i++) {
-		if (vs[i] != null) addVideo(vs[i]);
+
+	for (const video of data.videos) {
+		addVideo(video)
 	}
 });
 socket.on("delVideo", function (data) {
 	unfuckPlaylist();
 	dbg(data);
-	var pos = data.position;
-	elem = $("#playlist ul").children().eq(pos).data('plobject');
-	// Sanity check
-	if (elem.videoid != data.sanityid) {
-		// DOOR STUCK
+	const item = document.querySelector(`#playlist li:nth-child(${data.position})`);
+	const video = item.video;
+
+	if (video.videoid !== data.sanityid) {
 		socket.emit("refreshMyPlaylist");
+		return;
 	}
-	else {
-		elem.domobj.remove();
-		PLAYLIST.remove(elem);
-		smartRefreshScrollbar();
-		recalcStats();
-	}
+
+	item.remove();
+	PLAYLIST.remove(video);
+
+	recalcStats();
 });
 socket.on("setLeader", function (data) {
 	if (data && !LEADER) {
@@ -228,8 +226,9 @@ socket.on("newChatList", function (data) {
 	initChatList(data);
 });
 socket.on("userJoin", function (data) {
-	dbg('JOIN'); dbg(data);
-	addUser(data, true, true);
+	if (getVal('chatlistInitialised')) {
+		addUser(data, true, data.nick !== NAME);
+	}
 });
 socket.on("fondleUser", function (data) {
 	switch (data.action) {
@@ -314,7 +313,6 @@ socket.on("setToggleable", function (data) {
 	setToggleable(tn, ts);
 });
 socket.on("setToggleables", function (data) {
-	dbg(data);
 	for (var i in data) {
 		tn = i;
 		ts = data[i].state;
@@ -331,23 +329,6 @@ socket.on("recvFilters", function (data) {
 });
 socket.on("recvBanlist", function (data) {
 	BANLIST = data;
-});
-socket.on("recvPlugins", function (data) {
-	for (var i = 0; i < data.length; i++) {
-		//console.log("plugins",data[i]);
-		var obj = {};
-		for (var j in data[i]) {
-			if (data[i][j].match(/^function/)) {
-				obj[j] = eval("temp = " + data[i][j]);
-			} else {
-				obj[j] = data[i][j];
-			}
-		}
-		PLUGINS.push(obj);
-	}
-	for (var i = 0; i < PLUGINS.length; i++) {
-		if (PLUGINS[i].onLoad) PLUGINS[i].onLoad();
-	}
 });
 //socket.emit("setOverrideCss","http://74.67.181.100/test.css")
 socket.on("overrideCss", function (data) {
@@ -492,44 +473,36 @@ socket.on('searchHistoryResults', function (data) {
 				},
 				toolBox: true
 			});
-			var optionList = $("<ul/>").addClass("optionList").appendTo(cmds);
-			if (me.data("plobject").videotype == "yt") {
-				var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-				$("<span/>").text("Open on YouTube").appendTo(optBtn);
-				optBtn.click(function () {
-					var vid = me.data("plobject").videoid;
-					window.open('https://youtu.be/' + vid, '_blank');
-				});
-			}
-			else if (me.data("plobject").videotype == "vimeo") {
-				var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-				$("<span/>").text("Open on Vimeo").appendTo(optBtn);
-				optBtn.click(function () {
-					var vid = me.data("plobject").videoid;
-					window.open('https://vimeo.com/' + vid, '_blank');
-				});
-			}
-			else if ($(entry).data("plobject").videotype == "soundcloud") {
-				var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-				$("<span/>").text("Open on SoundCloud").appendTo(optBtn);
-				optBtn.click(function () {
-					var vid = $(entry).data("plobject").meta.permalink;
-					if (vid) {
-						window.open(vid, '_blank');
-					}
-				});
-			}
-			else if ($(entry).data("plobject").videotype == "dm") {
-				var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-				$("<span/>").text("Open on DailyMotion").appendTo(optBtn);
-				optBtn.click(function () {
-					var vid = me.data("plobject").videoid.substr(2);
-					window.open('https://www.dailymotion.com/video/' + vid, '_blank');
-				});
+
+			const video = me[0].video;
+			let info = ['', ''];
+
+			switch (video.videotype) {
+				case 'yt': info = ['yt', 'Youtube', `https://youtu.be/${video.videoid}`]; break;
+				case 'vimeo': info = ['vimeo', `https://youtu.be/${video.videoid}`]; break;
+				case 'dm': info = ['dm', `https://youtu.be/${video.videoid}`]; break;
+				case 'soundcloud': info = ['soundcloud', 'Soundcloud', video.meta.permalink]; break;
+				default:
+					break;
 			}
 
-			if (optionList.children().length == 0) {
+			if (info[0] === '') {
 				cmds.window.close();
+				return false;
+			}
+
+			const option = createElement('ul', {class: 'optionList'});
+			const button = createElement(
+				'div', {class: 'button'},
+				createElement('span', {text: `Open on ${info[1]}`})
+			);
+
+			button.onclick = () => {
+				if (video.videotype === 'soundcloud' && !info[2]) {
+					return;
+				}
+				
+				window.open(info[2], '_blank');
 			}
 
 			return false;
@@ -540,9 +513,8 @@ socket.on('searchHistoryResults', function (data) {
 
 		$('<div/>').addClass("clear").appendTo(entry);
 	}
-	smartRefreshScrollbar();
+
 	scrollToPlEntry(0);
-	realignPosHelper();
 });
 socket.on('videoRestriction', function (data) {
 	showVideoRestrictionDialog(data);

@@ -202,8 +202,10 @@ function GroupButton(id, name, hasNew, hasUpdated, suffix, themeButtons) {
 	}
 
 	this.reloadButtonList = function() {
-		$('#' + this.buttonListDivId).remove();
-		$('body').append(this.getButtonList());
+		document.querySelector('#' + this.buttonListDivId)?.replaceChildren(
+			this.getButtonList()[0]
+		);
+
 		this.wireThemeListeners();
 	}
 }
@@ -1106,7 +1108,7 @@ function gakAttack() {
 function gakify(node) {
 	var text;
 	if (gakified) {
-		text = node.data('plobject').videotitle;
+		text = node[0].video.videotitle;
 		return decodeURIComponent(text);
 	}
 	else {

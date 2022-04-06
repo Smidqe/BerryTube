@@ -484,9 +484,8 @@ function showCssOverrideWindow() {
 	});
 	var commitBtn = $('<div/>').addClass('button').appendTo(mainOptWrap);
 	$('<span/>').appendTo(commitBtn).text("Save and Propogate");
-	commitBtn.confirmClick(function () {
-		socket.emit("setOverrideCss", cssOv.val());
-	});
+	commitBtn[0].onclick = confirmClick(commitBtn[0], () => socket.emit('setOverrideCss', cssOv.val()))
+
 
 	parent.window.center();
 
@@ -620,18 +619,23 @@ function showPluginWindow() {
 	parent.window.center();
 }
 
-function loadPlugin(node) {
+async function loadPlugin(node) {
 	if (!node.loaded) {
 		dbg('Loading ' + node.title);
-		var head = $('head');
-		for (var i in node.css) {
-			var css = $('<link/>').attr('rel', 'stylesheet').attr('type', 'text/css').attr('href', node.css[i]);
-			head.append(css);
-		}
-		for (var j in node.js) {
-			var js = $('<script/>').attr('type', 'text/javascript').attr('src', node.js[j]);
-			head.append(js);
-		}
+
+		await new Promise((res) => {
+			document.head.append(
+				...node.css.map(css => {
+					return createElement('link', {rel: 'stylesheet', type: 'text/css', href: css, defer: ''})
+				}),
+				...node.js.map(js => {
+					return createElement('script', {type: 'text/javascript', src: js, defer: ''})
+				})
+			);
+
+			res()
+		})
+
 		node.loaded = true;
 	}
 	else {
@@ -811,9 +815,8 @@ function windowHidden() {
 function addZero(i) {
 	if (i < 10) {
 		i = "0" + i.toString();
-	} else {
-		i = i.toString();
 	}
+	
 	return i;
 }
 function secToTime(seconds) {
@@ -841,11 +844,13 @@ function secToTime(seconds) {
 }
 function setNick(nick) {
 	NAME = nick;
-	$("#chatControls .nick").text(NAME);
+	document.querySelector("#chatControls .nick").textContent = NAME;
 
-	whenExists("#chatlist ul", (list) => {
-		list.find(`[nick="${nick}"]`).addClass('me');
-	});
+	let nickElem = document.querySelector('.setNick');
+
+	nickElem.previousSibling.classList.remove('right');
+	nickElem.previousSibling.setAttribute('aria-label', 'message');
+	nickElem.remove();
 
 	ORIGNAME = nick;
 	sortUserList();
@@ -868,7 +873,7 @@ function recalcStats() {
 }
 
 function setToggleable(name, state, label) {
-	var opt = $(".tgl-" + name);
+	var opt = document.querySelector(".tgl-" + name);
 	if (typeof label == "undefined") {
 		TOGGLEABLES[name].state = state;
 	} else {
@@ -877,19 +882,13 @@ function setToggleable(name, state, label) {
 			label: label
 		};
 	}
-	dbg(TOGGLEABLES);
-	dbg(opt);
-	if (state) {
-		opt.prop('checked', true);
-	} else {
-		opt.prop('checked', false);
+
+	if (opt) {
+		opt.checked = state;
 	}
 }
 function getToggleable(name) {
-	if (typeof TOGGLEABLES[name] != "undefined") {
-		return TOGGLEABLES[name].state;
-	}
-	return false;
+	return TOGGLEABLES[name]?.state ?? false;
 }
 function forceStateChange() {
 	var s = videoGetState();
@@ -907,18 +906,11 @@ function handleACL() {
 
 	try {
 		dbg("ACL INIT:");
+		const body = document.body;
 
-		var body = $('body');
-		body.removeClass('admin mod berry assistant');
-		if (TYPE == 2) {
-			body.addClass('admin');
-		}
-		else if (TYPE == 1) {
-			body.addClass('assistant');
-		}
-		if (LEADER) {
-			body.addClass('berry');
-		}
+		body.classList.toggle('admin', TYPE === 2);
+		body.classList.toggle('assistant', TYPE === 1);
+		body.classList.toggle('berry', LEADER);
 
 		if (isRegisteredUser()) {
 			var headbar = $('#headbar');
@@ -947,92 +939,75 @@ function handleACL() {
 
 		if (canSeeAdminLog()) {
 			whenExists('#chatControls', function (chatControls) {
-				if ($('#chatControls .log').length == 0) {
-					var logMenu = $('<div/>').addClass('log').appendTo(chatControls).text("Log");
-					logMenu.click(function () {
-						showLogMenu(logMenu);
-					});
+				if (!chatControls[0].querySelector('.log')) {
+					const menu = createElement('div', {class: 'log', text: 'Log'});
+					
+					chatControls[0].append(
+						menu
+					);
+
+					menu.onclick = () => showLogMenu($(menu));
 				}
 			});
 		}
 
-		if (controlsPlaylist()) {
-			whenExists("#playlistAddControls", function (pl) {
-				if (pl.is(":hidden")) {
-					pl.show("blind");
-				}
-				var playlist = $("#playlist ul");
-				playlist.addClass("controlsOn");
-				if (playlist.hasClass("previouslyEnabled")) {
-					playlist.sortable("enable");
-				} else {
-					playlist.addClass("previouslyEnabled");
-					playlist.find("li").each(function () {
-						this.append(
-							createQueueButton(this),
-							createDeleteButton(this)
-						);
-					});
-					playlist.sortable({
-						start: function (event, ui) {
-							PLAYLIST_DRAGFROM = ui.item.index();
-							PLAYLIST_DRAGSANITY = ui.item.data('plobject').videoid;
-						},
-						update: function (event, ui) {
-							PLAYLIST_DRAGTO = ui.item.index();
-							if (controlsPlaylist()) {
-								var data = {
-									from: PLAYLIST_DRAGFROM,
-									to: PLAYLIST_DRAGTO,
-									sanityid: PLAYLIST_DRAGSANITY
-								};
-								dbg(data);
-								socket.emit("sortPlaylist", data);
-							}
-							$(this).sortable('cancel');
-						},
-						items: 'li:not(.history)'
-					});
-				}
-				plul.disableSelection();
-				if (ACTIVE && ACTIVE.domobj) {
-					scrollToPlEntry(ACTIVE.domobj.index());
-				}
-				dbg("CAN CONTROL PLAYLIST");
-			});
-		} else {
-			whenExists("#playlistAddControls", function (pl) {
-				if (pl.is(":visible")) {
-					pl.hide("blind");
-				}
-				var playlist = $("#playlist ul");
-				playlist.removeClass("controlsOn");
-				try {
-					playlist.sortable("disable");
-				}
-				catch (e) { }
-				dbg("CAN NOT CONTROL PLAYLIST");
-			});
-		}
+		whenExists("#playlistAddControls", (controls) => {
+			const canQueue = controlsPlaylist();
+			const canDelete = canDeleteVideo();
 
-		if (canCreatePoll()) {
-			whenExists("#pollControl", function (pc) {
-				if (pc.is(":hidden")) {
-					pc.show("blind");
-				}
-				dbg("CAN CONTROL POLLS");
-			});
-			$(".poll-control").addClass("enabled");
-		} else {
-			whenExists("#pollControl", function (pc) {
-				if (pc.is(":visible")) {
-					pc.hide("blind");
-				}
-				dbg("CAN NOT CONTROL POLLS");
-			});
-			$(".poll-control").removeClass("enabled");
-		}
+			controls[0].style.display = canQueue ? 'block' : 'none';
 
+			const playlist = controls[0].parentNode.querySelector('ul');
+
+			playlist.classList.toggle('controlsOn', canQueue);
+
+			if (canQueue && !playlist.classList.contains('previouslyEnabled')) {
+				playlist.classList.add("previouslyEnabled");
+				Sortable.create(playlist, {
+					onStart: function (event) {
+						console.warn(event)
+					},
+					onEnd: function (event, ui) {
+						var data = {
+							from: event.oldIndex,
+							to: event.newIndex,
+							sanityid: event.item.video.videoid
+						};
+						dbg(data);
+						socket.emit("sortPlaylist", data);
+					}
+				});
+
+				for (const node of playlist.childNodes) {
+					if (!node.querySelector('.requeue')) {
+						node.append(createQueueButton(node));
+					}
+
+					if (canDelete && !node.querySelector('.delete')) {
+						node.append(createDeleteButton(node));
+					}
+				}
+			}
+
+			if (playlist.classList.contains('previouslyEnabled')) {
+				Sortable.get(playlist).disabled = canQueue;
+			}
+
+			if (!canQueue) {
+				playlist.querySelectorAll('.requeue, .delete').forEach(node => node.remove());
+			}
+
+			if (ACTIVE && ACTIVE.domobj) {
+				scrollToPlEntry(ACTIVE.domobj.index());
+			}
+		});
+
+		//show/hide poll controls
+		whenExists("#pollControl", function (pc) {
+			pc[0].style.display = canCreatePoll() ? 'block' : 'none';
+			document.querySelector('.poll-control')?.classList.toggle('enabled', canCreatePoll());
+		});
+		
 		if (canSetAreas()) {
 			$('.editBtn').remove();
 			attachAreaEdit($("#dyn_header"), "header");
@@ -1194,8 +1169,20 @@ function scrollBuffersToBottom() {
 	if (!KEEP_BUFFER) {
 		return;
 	}
-	$('#chatbuffer').prop({ scrollTop: $('#chatbuffer').prop("scrollHeight") });
-	$('#adminbuffer').prop({ scrollTop: $('#adminbuffer').prop("scrollHeight") });
+
+	const buffers = [
+		document.querySelector('#chatbuffer'),
+		document.querySelector('#adminbuffer')
+	];
+	const heights = [];
+	requestAnimationFrame(() => {
+		heights.push(...buffers.map(n => n.scrollHeight));
+	})
+	requestAnimationFrame(() => {
+		for (let index = 0; index < heights.length; index++) {
+			buffers[index].scrollTop = heights[index]
+		}
+	})
 }
 
 function addChatMsg(data, _to) {
@@ -1210,173 +1197,225 @@ function addChatMsg(data, _to) {
 		var metadata = data.msg.metadata;
 		var isGhost = data.ghost;
 
-		if (typeof (nick != "undefined")) {
-			var msgwrap = $("<div/>").appendTo(to).addClass('msgwrap').attr('nick', nick);
-		}
-		var newmsg = $("<div/>");
+		const wrap = createElement('div', {class: 'msgwrap'});
+		const message = createElement('div');
 
-		if ((IGNORELIST.indexOf(nick) != -1 && !metadata.nameflaunt) ||
-			(IGNORE_GHOST_MESSAGES && isGhost)) {
-			// Don't add the message if we're ignoring the sender or it's a ghost on a reconnect
+		wrap.append(
+			message
+		);
+
+		if (typeof (nick !== "undefined")) {
+			wrap.setAttribute('nick', nick);
+		}
+
+		if (IGNORELIST.includes(nick) && !metadata.nameflaunt) {
 			return;
 		}
 
-		const chatlistUser = $(`#chatlist [nick="${nick}"]`);
-
-		if (chatlistUser.length > 0) {
-			msgwrap.addClass(chatlistUser.attr('class'));
+		if (IGNORE_GHOST_MESSAGES && data.ghost) {
+			return;
 		}
+
+		const user = document.querySelector(`#chatlist [nick="${nick}"]`);
+		const isSquee = metadata.isSquee || (nick != NAME && NAME.length > 0 && detectName(NAME, msgText));
 		
-		if (metadata.graymute) { msgwrap.addClass("graymute"); }
+		let includeTimestamp = false;
 
-		var isSquee = metadata.isSquee || (nick != NAME && NAME.length > 0 && detectName(NAME, msgText));
-		var includeTimestamp = false;
+		if (user) {
+			wrap.classList.add(
+				...user.getAttribute('class').split(' ')
+			);
+		}
 
+		if (data.msg.metadata.graymute) {
+			wrap.classList.add('graymute');
+		}
+
+		message.classList.add('message');
+
+		if (data.msg.emote) {
+			message.classList.add(
+				data.msg.emote === 'poll' ? 'pollNote' : data.msg.emote
+			);
+		}
+
+		to[0].lastMsgRecvBy = "";
 		switch (data.msg.emote) {
-			case false:
-				// Regular message
-				if (isSquee) {
-					msgwrap.addClass("highlight");
-					doSqueeNotify();
-					addNewMailMessage(data.msg.nick, data.msg.msg);
+			case 'spoiler':
+			case 'sweetiebot':
+			case 'request':
+			case 'act': {
+				const inner = createElement('span', {class: 'msg'});
+
+				if (data.msg.emote === 'request') {
+					inner.append(formatChatMsg("requests " + msgText));
+				} else {
+					inner.append(formatChatMsg(msgText));
 				}
 
-				newmsg.addClass("message").appendTo(msgwrap);
+				message.classList.add('message', data.msg.emote);
+				message.append(
+					createElement('span', {class: 'nick', text: nick}),
+					inner,
+				)
 
-				if (to.data("lastMsgRecvBy") != nick) {
-					var name = $("<span/>").addClass("nick").appendTo(newmsg);
-					if (metadata.nameflaunt) {
-						name.addClass("flaunt level_" + data.msg.type);
-					}
-					if (metadata.flair != 0 && metadata.flair != null) {
-						name.text(nick);
-						$("<div/>").addClass("flair").addClass("flair_" + metadata.flair).appendTo(name);
-						name.append(":");
-					}
-					else {
-						name.text(nick + ":");
-					}
-					includeTimestamp = true;
+				if (data.msg.emote === 'spoiler') {
+					message.lastChild.before(
+						createElement('span', {class: 'spoiltag', text: 'SPOILER: '})
+					)
 				}
-
-				$("<span/>").addClass("msg").appendTo(newmsg).append(formatChatMsg(msgText));
-				to.data("lastMsgRecvBy", nick);
-				break;
-			case "act":
-				// Action text
-				if (isSquee) {
-					msgwrap.addClass("highlight");
-					doSqueeNotify();
-				}
-
-				newmsg.addClass("message act").appendTo(msgwrap);
-				$("<span/>").addClass("nick").appendTo(newmsg).text(nick);
-				$("<span/>").addClass("msg").appendTo(newmsg).append(formatChatMsg(msgText));
-				includeTimestamp = true;
-				to.data("lastMsgRecvBy", "");
-				break;
-			case "request":
-				// Request
-				newmsg.addClass("message request").appendTo(msgwrap);
-				$("<span/>").addClass("nick").appendTo(newmsg).text(nick);
-				$("<span/>").addClass("msg").appendTo(newmsg).append(formatChatMsg("requests " + msgText));
-				includeTimestamp = true;
-				to.data("lastMsgRecvBy", "");
-				break;
-			case "sweetiebot":
-				// [](/sbstare)
-				if (isSquee) {
-					msgwrap.addClass("highlight");
-					doSqueeNotify();
-					addNewMailMessage(data.msg.nick, data.msg.msg);
-				}
-				newmsg.addClass("message sweetiebot").appendTo(msgwrap);
-				$("<span/>").addClass("nick").appendTo(newmsg).text(nick + ":");
-				$("<span/>").addClass("msg").appendTo(newmsg).append(formatChatMsg(msgText));
-				includeTimestamp = true;
-				to.data("lastMsgRecvBy", "");
-				break;
-			case "spoiler":
-				// Spoiler text
-				newmsg.addClass("message spoiler").appendTo(msgwrap);
-				$("<span/>").addClass("nick").appendTo(newmsg).text(nick + ":");
-				$("<span/>").addClass("spoiltag").appendTo(newmsg).text("SPOILER:");
-				$("<span/>").addClass("msg").appendTo(newmsg).append(formatChatMsg(msgText));
-				includeTimestamp = true;
-				to.data("lastMsgRecvBy", "");
-				break;
-			case "rcv":
-				// ROYAL CANTERLOT VOICE
-				if (isSquee) {
-					msgwrap.addClass("highlight");
-					doSqueeNotify();
-					addNewMailMessage(data.msg.nick, data.msg.msg);
-				}
-				newmsg.addClass("message rcv").appendTo(msgwrap);
-				$("<span/>").addClass("nick").appendTo(newmsg).text(nick + ":");
-				var msg = $("<span/>").addClass("msg").appendTo(newmsg).append(formatChatMsg(msgText));
-
-				msgwrap.data("oldPlace", msg.prev());
-				msgwrap.data("madeAt", new Date().getTime());
-				var rcv = $("#chatbuffer").data("rcv");
-				rcv.unshift(msgwrap);
 
 				includeTimestamp = true;
-				to.data("lastMsgRecvBy", "");
+				
 				break;
-			case "drink":
-				// Drink call
-				msgwrap.addClass("drinkWrap");
-				if (msgwrap.prev().hasClass("drinkWrap")) {
-					msgwrap.css("border-top", "0px");
+			}
+			case 'server':
+			case 'poll': {
+				let inner = createElement('span');
+
+				if (data.msg.emote === 'poll') {
+					inner.innerHTML = `${nick} has created a new poll: "${msgText}"`;
+				} else {
+					inner.innerHTML = msgText;
 				}
-				newmsg.addClass("message drink").appendTo(msgwrap);
-				var tr = $("<tr/>").appendTo($("<table/>").appendTo(newmsg));
-				var td = $('<td width="100%"/>').appendTo(tr);
-				$("<span/>").addClass("nick").appendTo(td).text(nick + ":");
-				$("<span/>").addClass("msg").appendTo(td).html(msgText + " drink!");
+
+				message.append(
+					inner
+				);
+
+				break;
+			}
+			case 'rcv': {
+				message.append(
+					createElement('span', {class: 'nick', text: `${nick}:`}),
+					createElement('span', {class: 'msg'}),
+					createElement('span')
+				);
+
+				message.lastChild.append(
+					formatChatMsg(msgText)
+				);
+
+				wrap.madeAt = new Date().getTime();
+				
+				to[0].rcv.unshift(wrap);
+
+				includeTimestamp = true;
+				break;
+			}
+			case 'drink': {
+				wrap.classList.add('drinkWrap');
+
+				const table = createElement('table');
+				const row = createElement('tr');
+				const thing = createElement('td');
+
+				row.append(
+					thing
+				)
+
+				thing.append(
+					createElement('span', {class: 'nick', text: `${nick}:`}),
+					createElement('span', {class: 'msg'})
+				)
+
+				thing.lastChild.innerHTML = `${msgText} drink!`;
 
 				if (data.msg.multi) {
-					$("<span/>").addClass("multi").appendTo($("<td/>").appendTo(tr)).text(data.msg.multi + "x");
+					row.append(
+						createElement(
+							'td',
+							{},
+							createElement('span', {class: 'multi', text: `${data.msg.multi}x`})
+						)
+					)
 				}
 
-				to.data("lastMsgRecvBy", "");
+				table.append(
+					row
+				)
+				message.append(
+					table
+				)
+
 				break;
-			case "poll":
-				// New poll
-				newmsg.addClass("pollNote").appendTo(msgwrap);
-				$("<span/>").appendTo(newmsg).html(nick + ' has created a new poll: "' + msgText + '"');
+			}
+			case false: {
+				if (to[0].lastMsgRecvBy != nick) {
+					let name = createElement('span', {class: 'nick'});
+
+					if (metadata.nameflaunt) {
+						name.classList.add('flaunt', `level_${data.msg.type}`)
+					}
+
+					if (metadata.flair) {
+						name.textContent = nick;
+						name.append(
+							createElement('div', {class: `flair flair_${metadata.flair}`}),
+							':'
+						);
+					} else {
+						name.textContent = `${nick}:`
+					}
+
+					message.append(
+						name
+					)
+
+					includeTimestamp = true;
+				}
+				let inner = createElement('span', {class: 'msg'});
+
+				inner.append(
+					formatChatMsg(msgText)
+				);
+				
+				message.append(
+					inner
+				);
+
+				to[0].lastMsgRecvBy = nick;
 				break;
-			case "server":
-				// Server message
-				console.log(msgText);
-				newmsg.addClass("server").appendTo(msgwrap);
-				$("<span/>").appendTo(newmsg).html(msgText);
-				break;
-			default:
-				dbg("Unknown message type, emote=" + data.msg.emote);
-				return;
+			}
+			default: {
+				dbg(`Unknown message type, how? ${data.msg.emote}`)
+			}
 		}
 
-		$(to).children().slice(0, -500).remove();
+		if (isSquee && ['act', 'sweetiebot', 'rcv', false].contains(data.msg.emote)) {
+			wrap.classList.add("highlight");
+			doSqueeNotify();
+			addNewMailMessage(nick, data.msg.msg);
+		}
+
+		if (to[0].childNodes.length > 500) {
+			Array.from(to[0].childNodes).slice(0, -500).forEach(n => n.remove())
+		}
 
 		var d = new Date(data.msg.timestamp);
 
-		if (chatlistUser.length > 0) {
+		if (user) {
 			CHATLIST[nick] = d.getTime();
 		}
 
 		if (includeTimestamp) {
-			var h = addZero(d.getHours());
-			var m = addZero(d.getMinutes());
-			var s = addZero(d.getSeconds());
-			var name = $("<span/>").addClass("timestamp").prependTo(newmsg).text("<" + h + ":" + m + ":" + s + ">");
+			const h = addZero(d.getHours());
+			const m = addZero(d.getMinutes());
+			const s = addZero(d.getSeconds());
+
+			message.prepend(
+				createElement('span', {class: 'timestamp', text: `<${h}:${m}:${s}>`})
+			)
 		}
 
 		if (!isGhost) {
 			notifyNewMsg(metadata.channel, isSquee, data.msg.emote == "rcv");
 			scrollBuffersToBottom();
 		}
+
+		to[0].append(
+			wrap
+		);
 	});
 }
 function doSqueeNotify() {
@@ -1417,7 +1456,6 @@ function manageDrinks(drinks) {
 
 function handleNumCount(data) {
 	CONNECTED = data.num;
-	var name = 'connectedCount';
 
 	whenExists("#connectedCount", function (area) {
 		area.text(CONNECTED);
@@ -1543,9 +1581,7 @@ function plSearch(term) {
 		$("#plul li").removeClass("search-hidden");
 		$("#plul li.history").remove();
 		$("#plul li .title").removeAttr("active-offset");
-		smartRefreshScrollbar();
 		scrollToPlEntry(ACTIVE.domobj.index());
-		realignPosHelper();
 	} else {
 		if (TYPE >= 1 || LEADER) {
 			socket.emit('searchHistory', { search: term });
@@ -1578,9 +1614,7 @@ function plSearch(term) {
 			}
 			elem = elem.next;
 		}
-		smartRefreshScrollbar();
 		scrollToPlEntry(0);
-		realignPosHelper();
 	}
 }
 function newPoll(data) {
@@ -1918,10 +1952,8 @@ function addVideo(data, queue, sanityid) {
 		if (controlsVideo()) {
 			doPlaylistJump($(this));
 		}
-		//dbg($(this).next().data('plobject'));
 	});
 
-	smartRefreshScrollbar();
 	highlight(jq);
 	revertLoaders();
 	recalcStats();
@@ -1938,6 +1970,23 @@ function attachAreaEdit(elem, name) {
 			orig.css("background-image", "none");
 		});
 
+		/*
+		const editbtn = createElement('button', {
+			class: 'editBtn',
+			text: 'Edit',
+		});
+
+		editbtn.
+		editbtn.onclick = () => {
+			const wrap = createElement('div', {}
+				createElement('textarea'),
+				createElement('div', {}, 
+					createElement('button', {text: 'Save'})
+					createElement('button')
+				)
+			)
+		}
+		*/
 		editbtn.click(function () {
 
 			var minheight = 100;
@@ -2204,21 +2253,22 @@ function parseVideoURL(url, callback) {
 	callback(url, "yt");
 }
 function formatChatMsg(msg, greentext) {
+	msg = msg.replace(/(http[s]{0,1}:\/\/[^ ]*)/ig, '<a href="$&">$&</a>');
+	
+	const message = createElement('span');
 
-	var regexp = new RegExp("(http[s]{0,1}://[^ ]*)", 'ig');
-	msg = msg.replace(regexp, '<a href="$&">$&</a>');
+	message.innerHTML = msg;
 
-	var h = $('<span/>').html(msg);
-	$('a', h).attr("target", "_blank").attr("rel", "noopener noreferrer");
+	[message, ...message.querySelectorAll('a')].forEach(node => {
+		node.setAttribute('target', '_blank');
+		node.setAttribute('rel', 'noopener noreferrer')
+	});
 
-	if (greentext !== false) {
-		var re = RegExp("^>");
-		if (h.text().match(re)) {
-			h.addClass("green");
-		}
+	if (greentext && message.textContent.match(/^>/)) {
+		message.classList.add('green')
 	}
 
-	return h;
+	return message;
 }
 function secondsToString(seconds) {
 
@@ -2407,91 +2457,44 @@ function revertLoaders() {
 function highlight(elem) {
 	$(elem).effect("highlight", {}, 1000);
 }
+
 function scrollToPlEntry(index) {
-	var scrollbar = $('#playlist').data("plugin_tinyscrollbar");
-	try {
-		var t = $("#playlist ul").children(":not(.search-hidden)")[index];
-		var vph = $("#playlist .overview").height();
-		var plh = $("#playlist .viewport").height();
-		var o = $(t).position().top;
-		if (o + plh > vph) {
-			scrollbar.update("bottom");
-		} else {
-			scrollbar.update(o);
-		}
-	} catch (e) { }
-}
-function smartRefreshScrollbar() {
-	try {
-		const overview = $("#playlist .overview");
-		const viewport = overview.parent();
-		const playlist = viewport.parent();
-
-		var scrollPos = parseInt(overview.css("top")); //this is the slowest part
-		var listHeight = overview.height();
-		var viewportHeight = viewport.height();
-
-		var scrollbar = playlist.data("plugin_tinyscrollbar");
-		if (scrollPos + listHeight <= viewportHeight) {
-			scrollbar.update("bottom");
-		} else {
-			scrollbar.update(scrollPos * -1);
-		}
-	} catch (e) { }
-}
-function getVideoIdOfLongUrl(url) {
-	var id = url.match(/v=([^&]+)/);
-	if (id == null) {
-		return false;
-	}
-	var id = url.match(/v=([^&]+)/)[1];
-	return id;
-}
-function realignPosHelper() {
-	try {
-		var avgpos = ACTIVE.domobj.position().top + (ACTIVE.domobj.height() / 2);
-		var barloc = Math.round(100 * (avgpos / $("#playlist .overview").height()));
-		$("#playlist .track").css('background-position', '0px ' + barloc + '%');
-	} catch (e) { }
-}
-function setPlaylistPosition(to) {
-	/* Keep in mind this is a logical change,
-	nothing can change the physically playing
-	video except an order from the server. */
-	waitForFlag("PLREADY", function () {
-		//unset active class
-		dbg(to);
-		if (typeof ACTIVE.domobj != "undefined") {
-			ACTIVE.domobj.removeClass("active");
-		}
-
-		var elem = PLAYLIST.first;
-		ACTIVE = PLAYLIST.first;
-		for (var i = 0; i < PLAYLIST.length; i++) {
-			//dbg(elem.videoid+" =?= "+to.video.videoid);
-			if (elem.videoid == to.video.videoid) {
-				ACTIVE = elem;
-				//scrollToPlEntry(i);
-				break;
-			}
-			elem = elem.next;
-		}
-		if (typeof ACTIVE.domobj != "undefined") {
-			ACTIVE.domobj.addClass("active");
-		}
-		//PL_POSITION = to;
-
-		smartRefreshScrollbar();
-		realignPosHelper();
-		if (getStorage("plFolAcVid") == 1) {
-			var x = ACTIVE.domobj.index();
-			x -= 2;
-			if (x < 0) {
-				x = 0;
-			}
-			scrollToPlEntry(x);
-		}
+	const item = playlist.querySelector(`:nth-child(${index + 1}):not(.search-hidden)`)
+	
+	requestAnimationFrame(() => {
+		item.parentNode.scrollTop = item.offsetTop - (item.offsetHeight - item.clientHeight);
 	});
+}
+function smartRefreshScrollbar() {}
+
+function setPlaylistPosition(to, scroll = false) {
+	if (ACTIVE.domobj) {
+		ACTIVE.domobj[0].classList.remove("active");
+	}
+
+	var elem = PLAYLIST.first;
+	let length = PLAYLIST.length;
+	let index = 0;
+
+	ACTIVE = PLAYLIST.first;
+	for (var i = 0; i < length; i++) {
+
+		//dbg(elem.videoid+" =?= "+to.video.videoid);
+		if (elem.videoid == to.video.videoid) {
+			ACTIVE = elem;
+			index = i;
+			break;
+		}
+		elem = elem.next;
+	}
+
+	if (ACTIVE.domobj) {
+		ACTIVE.domobj[0].classList.add("active");
+	}
+
+	if (getStorage("plFolAcVid") == 1) {
+		scrollToPlEntry(index > 2 ? index - 2 : index);
+	}
 }
 
 function showChat(channel) {
@@ -2637,7 +2640,6 @@ function sortPlaylist(data) {
 			fromelem.domobj.hide("blind", function () {
 				fromelem.domobj.insertAfter(toelem.domobj).show("blind", function () {
 					fromelem.domobj.css("display", "list-item");
-					realignPosHelper();
 					setVal("sorting", false);
 				});
 			});
@@ -2646,7 +2648,6 @@ function sortPlaylist(data) {
 			fromelem.domobj.hide("blind", function () {
 				fromelem.domobj.insertBefore(toelem.domobj).show("blind", function () {
 					fromelem.domobj.css("display", "list-item");
-					realignPosHelper();
 					setVal("sorting", false);
 				});
 			});

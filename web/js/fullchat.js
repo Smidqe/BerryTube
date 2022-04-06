@@ -35,8 +35,6 @@
         menu.css('background', 'none');
         menu.click(function () {
             playlist.show();
-            smartRefreshScrollbar();
-            realignPosHelper();
             if (getCookie("plFolAcVid") == "1") {
                 var x = ACTIVE.domobj.index();
                 x -= 2;

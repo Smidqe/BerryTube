@@ -96,9 +96,9 @@ if (date('n') == 6 && $_COOKIE['no-pride'] !== 'true') {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js" integrity="sha256-KM512VNnjElC30ehFwehXjx1YCHPiQkOPmqnrWtpccM=" crossorigin="anonymous" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tinyscrollbar/2.4.2/jquery.tinyscrollbar.min.js" integrity="sha256-gENsdwXJl1qiwOqS0DF+kfqTP5Dy+0gDTtxpRcWVhrU=" crossorigin="anonymous" defer></script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.15.4/video.min.js" integrity="sha512-dsg6qxwnVPFvhJhbRxyhW9gFvzytQ//4fCinJgKZQuoH6v6JYryP4OOjDGY7MfdVHjv1trJRDmJWdL2dNsbm6A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.18.1/video.min.js" integrity="sha512-ihOGFnO6EsSOoAW2wY28HdHiCuc9SYCt4b2yr3UcjLGySDTELNwJvDteq//Sr4BmvVoNRsPpSKsTMd4roJnQtw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.16/socket.io.min.js" integrity="sha256-bFYtqOZj1MLDlOrOlxCU9aruDP2zxiIKvmoo+dHsy4w=" crossorigin="anonymous" defer></script>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js" integrity="sha512-zYXldzJsDrNKV+odAwFYiDXV2Cy37cwizT+NkuiPGsa9X1dOz04eHvUWVuxaJ299GvcJT31ug2zO4itXBjFx4w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="<?= cdn('vendor/videojs-quality-selector/silvermine-videojs-quality-selector.js') ?>" defer></script>
 
 <script src="https://www.youtube.com/iframe_api" defer id="youtube-iframe-api"></script>

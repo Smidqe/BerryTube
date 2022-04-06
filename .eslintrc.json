@@ -3,7 +3,7 @@
 	"root": true,
 	"parserOptions": {
 		"sourceType": "module",
-		"ecmaVersion": 2019
+		"ecmaVersion": "latest"
 	},
 	"env": {
 		"browser": true,
@@ -14,7 +14,7 @@
 	},
 	"rules": {
 		"semi": "error",
-		"no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+		"no-unused-vars": ["warn", { "argsIgnorePattern": "^_|Bem" }],
 		"no-mixed-spaces-and-tabs": 0,
 		"no-console": 0,
 		"curly": "error"

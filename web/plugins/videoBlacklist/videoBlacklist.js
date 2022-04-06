@@ -133,7 +133,7 @@ new function(){
     ns.addVideoControls = function(entry,optionList){
         ns._addVideoControls(entry,optionList);
 
-        var stub = ns.getStub($(entry).data("plobject"));
+        var stub = ns.getStub(entry[0].video);
 
         // Blacklist Button
         if(ns.isOk(stub)){

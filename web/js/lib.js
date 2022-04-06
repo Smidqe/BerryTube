@@ -51,35 +51,36 @@
 	};
 })(jQuery);
 
-(function($){
-	$.fn.confirmClick = function(callback) {
-		return this.each(function() {
-			var btn = $(this);
-			var origText = $(btn).children("span").text();
-			btn.revert = function(){
-				$(btn).removeClass("confirm",200,function(){
-					$(btn).css('width','');
-					$(btn).children("span").text(origText);
-				});
-			};
-			$(btn).click(function(){
-				if($(btn).hasClass("confirm")){
-					if(callback)callback();
-					btn.revert();
-				} else {
-					$(btn).data("w",$(btn).width());
-					$(btn).addClass("confirm",50,function(){
-						$(btn).width($(btn).data("w"));
-						$(btn).children("span").text("Really?");
-						setTimeout(function(){
-							btn.revert();
-						},3000);
-					});
-				}
-			});
-		});
-	};
-})(jQuery);
+function confirmClick(node, cb) {
+	const hasText = node.firstChild.tagName === 'SPAN';
+	const fn = (e) => {
+		if (!node.contains(e.target)) {
+			return;
+		}
+
+		let classes = node.classList;
+
+		if (classes.contains('confirm')) {
+			if (hasText) {
+				node.firstChild.textContent = node.firstChild.oldText;
+			}
+			
+			cb();
+		}
+
+		classes.toggle('confirm');
+
+		setTimeout(() => {
+			classes.remove('confirm');
+		}, 3000);
+	}
+
+	if (hasText) {
+		node.firstChild.oldText = node.firstChild.textContent;
+	}
+
+	return fn;
+}
 
 (function ($) {
 	$.fn.superSelect = function (data) {
@@ -123,11 +124,9 @@
 			center:false,
 			toolBox:false,
 			initialLoading:false,
-			scrollable:false
+			scrollable:false,
+			...data
 		};
-		for(var i in data){
-			myData[i] = data[i];
-		}
 
 		//Tweak data
 		myData.title = myData.title.replace(/ /g,'&nbsp;');
@@ -281,28 +280,29 @@
 })(jQuery);
 
 jQuery.fn.center = function () {
+	const win = $(window);
     this.css("position","absolute");
-    this.css("top", Math.max(0, (($(window).height() - this.outerHeight()) / 2) + $(window).scrollTop()) + "px");
-    this.css("left", Math.max(0, (($(window).width() - this.outerWidth()) / 2) + $(window).scrollLeft()) + "px");
+    this.css("top", Math.max(0, ((win.height() - this.outerHeight()) / 2) + win.scrollTop()) + "px");
+    this.css("left", Math.max(0, ((win.width() - this.outerWidth()) / 2) + win.scrollLeft()) + "px");
     return this;
 };
 
 function whenExists(objSelector,callback){
-	var guy = $(objSelector);
-	if(guy.length <= 0){
+	var guy = document.querySelectorAll(objSelector);
+	if(!guy){
 		setTimeout(function(){
 			whenExists(objSelector,callback);
 		},100);
 	} else {
-		callback(guy);
+		callback($(guy));
 	}
 }
 
 function getVal(name){
-	return $(document).data(name);
+	return window.flags.get(name);
 }
 function setVal(name,val){
-	return $(document).data(name,val);
+	return window.flags.set(name, val);
 }
 
 function waitForFlag(flagname,callback){

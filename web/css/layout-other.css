@@ -386,6 +386,15 @@ body {
     font-size: 40px;
     text-align: center;
 }
+
+.chatbuffer .drinkWrap + .drinkWrap {
+	border-top: 0px;
+}
+
+.chatbuffer .drinkWrap td:first-of-type {
+	width: 100%;
+}
+
 #chatControls {
     color: black;
     font-size: 11px;
@@ -1054,4 +1063,21 @@ button.ranked-poll__submit-button {
 
 #scVolumeSlider .ui-slider-range {
 	background: #C600AD;
+}
+
+td > .optionWrap {
+	width: 30px !important;
+}
+
+#playlist > .viewport {
+	overflow-y: auto;
+}
+
+#ytapiplayer {
+	width: 100%;
+	height: 100%;
+}
+
+td > div#passwordbtn {
+	width: 120px;
 }

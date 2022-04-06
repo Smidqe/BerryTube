@@ -99,6 +99,11 @@ export class Raw extends Base {
 			autoplay: false,
 			controls: true,
 		};
+
+		this.frame = window.createElement('video', {
+			id: "vjs_player",
+			class: "video-js vjs-default-skin"
+		});
 	}
 
 	ready(cb) {
@@ -146,17 +151,11 @@ export class Raw extends Base {
 		}
 
 		this.video = {id, meta, timestamp, sync: length > 0};
-		this.frame = window.$("<video>", {
-			id: "vjs_player",
-			class: "video-js vjs-default-skin"
-		});
 	
 		//clear frame and add player
-		window.$(super.frame()).empty().append(
-			this.frame
-		);
+		super.frame().replaceChildren(this.frame);
 
-		this.player = window.videojs(this.frame[0].id, this.config);
+		this.player = window.videojs(this.frame.id, this.config);
 		this.sources = this.getSources(id, meta.manifest);
 	
 		//if we have multiple sources/qualities, add the quality selector 

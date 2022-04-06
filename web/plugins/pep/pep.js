@@ -139,8 +139,6 @@ PEP.initButts = function(){
 PEP.toggleTimes = function(){
   $('#toggleTimes').toggleClass('timesOn');
   $('#plul').toggleClass('showStarts');
-  smartRefreshScrollbar();
-  realignPosHelper();
 };
 
 PEP.oldVST = videoSeekTo;
@@ -352,7 +350,7 @@ unfuckPlaylist = function(){
 
 PEP.oldAVC = addVideoControls;
 addVideoControls = function(entry,optionList){
-  var plob=$(entry).data("plobject");
+  var plob= entry[0].video;
   var vid = plob.videoid;
   var vlink = false;
   switch(plob.videotype){//hmm. Could add osmf here, but people could more easily jack streams.
@@ -546,7 +544,6 @@ PEP.bench.fvc = function(data){
   $(document).bind("mouseup.checkplaylistresize",function (e){
     if($("#playlist").height()!==oplaylistsize){
       oplaylistsize = $("#playlist").height();
-      smartRefreshScrollbar();
     }
   });
 
