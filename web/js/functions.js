@@ -1458,7 +1458,7 @@ function handleNumCount(data) {
 	CONNECTED = data.num;
 
 	whenExists("#connectedCount", function (area) {
-		area.text(CONNECTED);
+		area[0].textContent = CONNECTED;
 	});
 }
 function closePoll(data) {
@@ -1764,7 +1764,6 @@ function newPoll(data) {
 	}
 }
 function updatePoll(data) {
-	const hasBem = typeof Bem !== 'undefined';
 	const $poll = $(".poll.active");
 	const $title = $poll.find('.title');
 	let pollTitle = getPollTitle(data);
@@ -2459,10 +2458,11 @@ function highlight(elem) {
 }
 
 function scrollToPlEntry(index) {
+	const viewport = document.querySelector('.viewport');
 	const item = playlist.querySelector(`:nth-child(${index + 1}):not(.search-hidden)`)
 	
 	requestAnimationFrame(() => {
-		item.parentNode.scrollTop = item.offsetTop - (item.offsetHeight - item.clientHeight);
+		viewport.scrollTop = item.offsetTop - (item.offsetHeight - item.clientHeight);
 	});
 }
 function smartRefreshScrollbar() {}
@@ -2505,16 +2505,6 @@ function showChat(channel) {
 	$('#chatpane').removeClass('admin');
 
 	switch (channel) {
-		case 'main':
-			$('#chatbuffer').removeClass('inactive');
-			$('#maintab').removeClass('newmsg squee').addClass('active');
-			$('#chatinput input').css('padding-left', '0px');
-			$('#adminRainbow').css('display', 'none');
-			if (MAIN_NOTIFY) {
-				clearInterval(MAIN_NOTIFY);
-				$('#chatpane').removeClass('squee');
-			}
-			break;
 		case 'admin':
 			$('#adminbuffer').removeClass('inactive');
 			$('#admintab').removeClass('newmsg squee').addClass('active');

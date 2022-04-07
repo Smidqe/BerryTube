@@ -1,15 +1,3 @@
-// fix performance issue in new jQuery UI
-(function($){
-	$.ui.sortable.prototype._setHandleClassName = function(){
-		this.element.find( ".ui-sortable-handle" ).removeClass( "ui-sortable-handle" );
-		$.each( this.items, function() {
-                (this.instance.options.handle
-                 ? this.item.find( this.instance.options.handle )
-                 : this.item
-                ).addClass('ui-sortable-handle');
-        });
-	};
-})(jQuery);
 
 (function($){
 	$.fn.timeOut = function(duration,callback) {
@@ -241,14 +229,35 @@ function confirmClick(node, cb) {
 		if(!myData.toolBox){
 			// Toolbar
 			var toolBar = $('<div/>').addClass("dialogToolbar").prependTo(newWindow);
-			newWindow.draggable({
-				handle:toolBar,
-				start: function() {
-				},
-				stop: function() {
-				}
-			});
+			
+			interact(toolBar[0]).draggable({
+				inertia: false,
+				listeners: {
+					start (event) {
+						if (!event.target.parentNode.position) {
+							event.target.parentNode.position = [0, 0];
+						}
+						
+						document.body.classList.add('dragging');
+					},
+					move (event) {
+						let parent = event.target.parentNode;
+						let [x, y]  = parent.position;
 
+						parent.position = [
+							x + event.dx,
+							y + event.dy
+						];
+
+						parent.style.transform =
+						`translate(${parent.position[0]}px, ${parent.position[1]}px)`
+					},
+					end () {
+						document.body.classList.remove('dragging')
+					}
+				}
+			})
+			
 			// Title
 			var titleBar = $('<div/>').addClass("dialogTitlebar").appendTo(toolBar).html(myData.title);
 

@@ -7,6 +7,7 @@
 	-webkit-box-shadow: 3px 3px 8px #000;
 	box-shadow: 3px 3px 8px #000;
 	display:none;
+	touch-action: none;
 }
 .dialogWindow .loading{
 	opacity: .2;
@@ -184,4 +185,9 @@
 .banZone .row .unban {
 	float: right;
 	width: 40px;
+}
+
+body.dragging * {
+	user-select: none;
+	touch-action: none;
 }

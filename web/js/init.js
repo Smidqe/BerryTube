@@ -320,8 +320,6 @@ function doColorTag(entry, tag, volat) {
 
 function sortUserList() {
 	whenExists("#chatlist ul", (list) => {
-		dbg("sorting");
-		
 		const groups = [
 			'.admin',
 			'.assistant',
@@ -1412,6 +1410,7 @@ function createPlaylistItem(data) {
 function newPlaylist(plul) {
 	plul[0].replaceChildren();
 
+	const playlist = plul[0];
 	let elem = PLAYLIST.first;
 	let length = PLAYLIST.length;
 
@@ -1420,7 +1419,7 @@ function newPlaylist(plul) {
 
 		elem.domobj = $(entry);
 		
-		plul[0].append(
+		playlist.append(
 			entry
 		);
 
@@ -2194,6 +2193,34 @@ function initAreas() {
 	);
 }
 function initMailbox() {
+	const clear = createElement('button', {class: 'btn', text: 'Clear'});
+	const button = createElement('div', {id: 'mailButtonDiv'},
+		createElement('img', {src: `${CDN_ORIGIN}/images/envelope.png`, alt: 'mail'})
+	)
+
+	button.onclick = toggleMailDiv;
+	clear.onclick = function() {
+		this.parentNode.previousSibling.replaceChildren();
+		this.closest('#mailDiv').classList.remove('new');
+
+		toggleMailDiv();
+	}
+
+	const box = createElement('div', {id: 'mailDiv'},
+		createElement('div', {id: 'mailboxDiv', class: 'hidden'}, 
+			createElement('div', {id: 'mailMessageDiv'}),
+			createElement('div', {},
+				clear,
+			)
+		),
+		button
+	)
+
+	document.body.append(
+		box
+	);
+
+	/*
 	$('body').append(
 		$('<div id="mailDiv"/>').append(
 			$('<div id="mailboxDiv"/>').css('display', 'none').append(
@@ -2205,6 +2232,7 @@ function initMailbox() {
 						toggleMailDiv();
 					}))),
 			$('<div id="mailButtonDiv"/>').html('<img src="' + CDN_ORIGIN + '/images/envelope.png" alt="mail"></img>').click(toggleMailDiv)));
+	*/
 }
 $(function () {
 	dbg("page loaded, firing onload scripts");

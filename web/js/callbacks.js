@@ -75,8 +75,6 @@ socket.on("hbVideoDetail", function (data) {
 		return;
 	}
 
-	dbg('hbVideoDetail', data);
-
 	//not matching, refresh player
 	if (ACTIVE.videoid !== data.video.videoid) {
 		dbg(`ID mismatch: ${ACTIVE.videoid} !== ${data.video.videoid}`);

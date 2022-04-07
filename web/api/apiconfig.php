@@ -24,5 +24,5 @@
     define("PATH","/");
 
     define('ORIGIN', "$scheme://$domain$port");
-    define('SOCKET_ORIGIN', "$scheme://socket.berrytube.tv");
+    define('SOCKET_ORIGIN', "$scheme://socket.$domain$port");
     define('CDN_ORIGIN', ORIGIN);
