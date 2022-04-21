@@ -250,38 +250,6 @@ try {
 	console.error(e);
 }
 
-function addColorTag(entry, elem) {
-	if ("colorTag" in elem.meta) {
-		var v = false;
-		if ("colorTagVolat" in elem.meta) { v = elem.meta.colorTagVolat; }
-		_setVidColorTag(entry, elem.meta.colorTag, v);
-	}
-}
-function addTitle(entry, elem) {
-	var title = $("<div/>").appendTo(entry);
-	title.text(decodeURI(elem.videotitle).replace(/&amp;/g, '&'));
-	title.addClass('title');
-}
-function addTime(entry, elem) {
-	var time = $("<div/>").appendTo(entry);
-	var seconds = elem.videolength;
-	time.text(secToTime(seconds));
-	time.addClass('time');
-}
-function addDelete(entry) {
-	if (canDeleteVideo() && $('> .delete', entry).length == 0) {
-		var delbtn = $("<div/>").appendTo(entry);
-		delbtn.text("X");
-		delbtn.addClass('delete');
-		delbtn.confirmClick(function () {
-			doDelete(entry);
-		});
-		delbtn.mousedown(function (e) {
-			e.stopPropagation();
-			e.preventDefault();
-		});
-	}
-}
 function doDelete(entry) {
 	if (canDeleteVideo()) {
 		var index = $(entry).index();
@@ -949,9 +917,7 @@ function addVideoControls(entry, optionList) {
 	if (controlsPlaylist() && $(entry).data("plobject") != ACTIVE) {
 		var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
 		$("<span/>").text("Jump to Video").appendTo(optBtn);
-		optBtn.confirmClick(function () {
-			doPlaylistJump(entry);
-		});
+		optBtn[0].onclick = confirmClick(optBtn[0], () => doPlaylistJump(entry))
 	}
 	// Skip Button
 	if (controlsPlaylist() && $(entry).data("plobject") == ACTIVE) {
@@ -1077,38 +1043,7 @@ function addVideoControls(entry, optionList) {
 		$("<div/>").css("clear", "both").appendTo(colorGrid);
 	}
 }
-function populatePlEntry(entry, elem) {
-	addColorTag(entry, elem);
-	
-	addTitle(entry, elem);
-	addTime(entry, elem);
-	
-	addRequeue(entry);
-	addDelete(entry);
-	
-	if (elem.volat) {
-		entry.addClass("volatile");
-	}
-	$(entry).bind("contextmenu", function (e) {
-		var me = $(this);
-		var cmds = $("body").dialogWindow({
-			title: "Video Options",
-			uid: "videomenu",
-			offset: {
-				top: e.pageY - 5,
-				left: e.pageX - 5
-			},
-			toolBox: true
-		});
-		var optionList = $("<ul/>").addClass("optionList").appendTo(cmds);
-		addVideoControls(me, optionList);
-		if (optionList.children().length == 0) {
-			cmds.window.close();
-		}
 
-		return false;
-	});
-}
 function initRCVOverlay(above) {
 	var overlay = $("<div/>").insertBefore(above).attr('id', 'rcvOverlay');
 
@@ -1431,22 +1366,81 @@ function doPlaylistJump(elem) {
 		socket.emit("forceVideoChange", { index: index, sanityid: id });
 	}
 }
-function newPlaylist(plul) {
 
-	$(plul).children().remove();
+function createQueueButton(entry) {
+	let element = createElement('div', {text: 'Q', class: 'requeue'});
+
+	element.onclick = () => {
+		if (controlsPlaylist()) {
+			doRequeue($(entry))
+		}
+	};
+	element.onmousedown = (e) => {
+		e.stopPropagation();
+		e.preventDefault();
+	};
+
+	return element;
+}
+
+function createDeleteButton(entry) {
+	let element = createElement('div', {text: 'X', class: 'delete'});
+
+	element.onclick = confirmClick(element, () => {
+		if (canDeleteVideo()) {
+			doDelete($(entry))
+		}
+	});
+
+	element.onmousedown = (e) => {
+		e.stopPropagation();
+		e.preventDefault();
+	};
+
+	return element;
+}
+
+function createPlaylistItem(data) {
+	const item = createElement('li');
+
+	if (data.meta.colorTag) {
+		_setVidColorTag(item, data.meta.colorTag, data.meta.colorTagVolat || false);
+	}
+
+	item.append(
+		createElement('div', {class: 'title', text: decodeURIComponent(data.videotitle).replace(/&amp;/g, '&')}),
+		createElement('div', {class: 'time', text: secToTime(data.videolength)}),
+		createQueueButton(item),
+		createDeleteButton(item)
+	);
+
+	if (data.volat) {
+		item.classList.add('volatile');
+	}
+
+	return item;
+}
+
+function newPlaylist(plul) {
+	plul[0].replaceChildren();
+
 	var elem = PLAYLIST.first;
 	for (var i = 0; i < PLAYLIST.length; i++) {
-		var entry = $("<li/>").appendTo(plul);
-		entry.data('plobject', elem);
-		elem.domobj = entry;
+		let entry = createPlaylistItem(elem);
 
-		populatePlEntry(entry, elem);
+		elem.domobj = $(entry);
+		elem.domobj.data('plobject', elem);
+
+		plul[0].append(
+			entry
+		);
 
 		elem = elem.next;
 	}
 	dbg(PLAYLIST.first.videolength);
 	recalcStats();
 }
+
 function initPlaylist(parent) {
 
 	$("#playlist").remove();
@@ -1506,7 +1500,27 @@ function initPlaylist(parent) {
 
 	// This looks silly, but it's to avoid double-firing events on reconnect
 	$(window).unbind('keydown', keydownEventHandler).keydown(keydownEventHandler);
+	$(plwrap).on("contextmenu", "li", function (e) {
+		var me = $(this);
+		var cmds = $("body").dialogWindow({
+			title: "Video Options",
+			uid: "videomenu",
+			offset: {
+				top: e.pageY - 5,
+				left: e.pageX - 5
+			},
+			toolBox: true
+		});
+		var optionList = $("<ul/>").addClass("optionList").appendTo(cmds);
+		addVideoControls(me, optionList);
+		if (optionList.children().length == 0) {
+			cmds.window.close();
+		}
 
+		return false;
+	});
+
+	plwrap.tinyscrollbar();
 	newPlaylist(plul);
 }
 

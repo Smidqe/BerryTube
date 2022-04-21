@@ -486,9 +486,7 @@ function showCssOverrideWindow() {
 	});
 	var commitBtn = $('<div/>').addClass('button').appendTo(mainOptWrap);
 	$('<span/>').appendTo(commitBtn).text("Save and Propogate");
-	commitBtn.confirmClick(function () {
-		socket.emit("setOverrideCss", cssOv.val());
-	});
+	commitBtn[0].onclick = confirmClick(commitBtn[0], () => socket.emit("setOverrideCss", cssOv.val()));
 
 	parent.window.center();
 
@@ -982,12 +980,6 @@ function handleACL() {
 					playlist.sortable("enable");
 				} else {
 					playlist.addClass("previouslyEnabled");
-					playlist.find("li").each(function () {
-						const el = $(this);
-						//addVolatile(entry);
-						addRequeue(el);
-						addDelete(el);
-					});
 					playlist.sortable({
 						start: function (event, ui) {
 							PLAYLIST_DRAGFROM = ui.item.index();
@@ -1388,10 +1380,9 @@ function addChatMsg(data, _to) {
 			var name = $("<span/>").addClass("timestamp").prependTo(newmsg).text("<" + h + ":" + m + ":" + s + ">");
 		}
 
-		scrollBuffersToBottom();
-
 		if (!isGhost) {
 			notifyNewMsg(metadata.channel, isSquee, data.msg.emote == "rcv");
+			scrollBuffersToBottom();
 		}
 	});
 }
@@ -1925,40 +1916,37 @@ function addVideo(data, queue, sanityid) {
 	if (ACTIVE.videoid != sanityid) {
 		// DOOR STUCK
 		socket.emit("refreshMyPlaylist");
+		return;
 	}
-	else {
-		var elem = data;
-		plul = $("#playlist ul");
 
-		if (PLAYLIST.length == 0) {
-			PLAYLIST.append(elem);
-			var entry = $("<li/>").appendTo(plul);
-		} else {
-			if (queue) {
-				PLAYLIST.insertAfter(ACTIVE, elem);
-				var entry = $("<li/>").insertAfter(ACTIVE.domobj);
-			} else {
-				var x = PLAYLIST.last.domobj;
-				PLAYLIST.insertAfter(PLAYLIST.last, elem);
-				var entry = $("<li/>").insertAfter(x);
-			}
+	const entry = createPlaylistItem(data);
+	const dom = document.querySelector('#playlist ul');
+	
+	if (PLAYLIST.length === 0) {
+		PLAYLIST.append(data);
+		dom.append(entry);
+	} else {
+		PLAYLIST.insertAfter(queue ? ACTIVE : PLAYLIST.last, data);
+
+		(queue ? ACTIVE.domobj : PLAYLIST.last.domobj).after(
+			entry
+		);
+	}
+	const jq = $(entry);
+
+	data.domobj = jq;
+	jq.data('plobject', data);
+	jq.dblclick(function () {
+		if (controlsVideo()) {
+			doPlaylistJump($(this));
 		}
+		//dbg($(this).next().data('plobject'));
+	});
 
-		entry.data('plobject', elem);
-		elem.domobj = entry;
-		entry.dblclick(function () {
-			if (controlsVideo()) {
-				doPlaylistJump($(this));
-			}
-			//dbg($(this).next().data('plobject'));
-		});
-
-		populatePlEntry(entry, elem);
-		smartRefreshScrollbar();
-		highlight(entry);
-		revertLoaders();
-		recalcStats();
-	}
+	smartRefreshScrollbar();
+	highlight(jq);
+	revertLoaders();
+	recalcStats();
 }
 function attachAreaEdit(elem, name) {
 	if (canSetAreas()) {
@@ -2028,25 +2016,22 @@ function setVidColorTag(pos, tag, volat) {
 	for (var i = 0; i < pos; i++) {
 		elem = elem.next;
 	}
-	_setVidColorTag(elem.domobj, tag, volat);
+	_setVidColorTag(elem.domobj[0], tag, volat);
 }
 function _setVidColorTag(domobj, tag, volat) {
-	var ct = $(domobj).find(".colorTag");
-	if (!ct.length) {
-		ct = $("<div/>").addClass("colorTag").prependTo(domobj);
+	var ct = domobj.querySelector(".colorTag");
+	if (!ct) {
+		ct = createElement('div', {class: 'colorTag'});
+		domobj.prepend(ct);
 	}
 
-	if (volat) {
-		ct.addClass("volatile");
-	} else {
-		ct.removeClass("volatile");
-	}
+	ct.classList.toggle('volatile', volat);
 
 	if (tag == false) {
 		ct.remove();
 	} else {
-		ct.removeClass('shitpost-flag');
-		ct.css('background-image', 'none');
+		ct.classList.remove('shitpost-flag');
+		ct.style['background-image'] = 'none';
 
 		let parts = tag.split('/');
 		if (parts.length === 1 && parts[0] === 'euro') {
@@ -2055,11 +2040,11 @@ function _setVidColorTag(domobj, tag, volat) {
 
 		switch (parts[0]) {
 			case 'flag':
-				ct.addClass('shitpost-flag');
-				ct.css('background-image', 'url(' + CDN_ORIGIN + '/images/famflags/' + parts[1].replace(/\.\//g, '') + '.png');
+				ct.classList.add('shitpost-flag');
+				ct.style['background-image'] = `url(${CDN_ORIGIN}/images/famflags/${parts[1].replace(/\.\//g, '')}.png)`;
 				break;
 			default:
-				ct.css("background-color", tag);
+				ct.style["background-color"] = tag;
 				break;
 		}
 	}

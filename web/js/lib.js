@@ -51,35 +51,37 @@
 	};
 })(jQuery);
 
-(function($){
-	$.fn.confirmClick = function(callback) {
-		return this.each(function() {
-			var btn = $(this);
-			var origText = $(btn).children("span").text();
-			btn.revert = function(){
-				$(btn).removeClass("confirm",200,function(){
-					$(btn).css('width','');
-					$(btn).children("span").text(origText);
-				});
-			};
-			$(btn).click(function(){
-				if($(btn).hasClass("confirm")){
-					if(callback)callback();
-					btn.revert();
-				} else {
-					$(btn).data("w",$(btn).width());
-					$(btn).addClass("confirm",50,function(){
-						$(btn).width($(btn).data("w"));
-						$(btn).children("span").text("Really?");
-						setTimeout(function(){
-							btn.revert();
-						},3000);
-					});
-				}
-			});
-		});
-	};
-})(jQuery);
+
+function confirmClick(node, cb) {
+	const hasText = node.firstChild.tagName === 'SPAN';
+	const fn = (e) => {
+		if (!node.contains(e.target)) {
+			return;
+		}
+
+		let classes = node.classList;
+
+		if (classes.contains('confirm')) {
+			if (hasText) {
+				node.firstChild.textContent = node.firstChild.oldText;
+			}
+			
+			cb();
+		}
+
+		classes.toggle('confirm');
+
+		setTimeout(() => {
+			classes.remove('confirm');
+		}, 3000);
+	}
+
+	if (hasText) {
+		node.firstChild.oldText = node.firstChild.textContent;
+	}
+
+	return fn;
+}
 
 (function ($) {
 	$.fn.superSelect = function (data) {
@@ -337,3 +339,28 @@ function onceFunction(fn) {
 		}
 	};
 }
+
+/*
+This function is meant to be an somewhat of an replacement to jQuery's $('<element>')
+syntax, with minor differences. But vanilla javascript is superior :P
+*/
+function createElement(kind, attrs = {}, ...children) {
+	const element = document.createElement(kind);
+
+	for (const [key, value] of Object.entries(attrs)) {
+		switch (key) {
+			case 'text': element.textContent = value; break;
+			case 'html': element.innerHTML = value; break;
+			default:
+				element.setAttribute(key, value);
+		}
+	}
+
+	if (children.length > 0) {
+		element.append(
+			...children
+		);
+	}
+
+	return element;
+};
