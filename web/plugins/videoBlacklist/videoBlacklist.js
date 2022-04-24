@@ -142,7 +142,7 @@ new function(){
             blackBtn.click(function(){
                 $(entry).addClass("blacklisted");
                 ns.blacklistVideo(stub);
-                if(window.ACTIVE == $(entry).data("plobject")) socket.emit("refreshMyVideo");
+                if(window.ACTIVE == entry[0].video) socket.emit("refreshMyVideo");
             });
         } else {
             var whiteBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
@@ -150,7 +150,7 @@ new function(){
             whiteBtn.click(function(){
                 $(entry).removeClass("blacklisted");
                 ns.unBlacklistVideo(stub);
-                if(window.ACTIVE == $(entry).data("plobject")) socket.emit("refreshMyVideo");
+                if(window.ACTIVE == entry[0].video) socket.emit("refreshMyVideo");
             });
         }
     }

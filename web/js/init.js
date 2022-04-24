@@ -153,9 +153,6 @@ var IGNORELIST = [];
 var CONNECTED = 0;
 var PLAYLIST = new LinkedList.Circular();
 var ACTIVE = new Video();
-var PLAYLIST_DRAGFROM = 0;
-var PLAYLIST_DRAGTO = 0;
-var PLAYLIST_DRAGSANITY = '';
 var SEEK_FROM = 0;
 var SEEK_TO = 0;
 var HISTORY = [];
@@ -197,6 +194,32 @@ var DEBUG_DUMPS = [];
 var HIGHLIGHT_LIST = (localStorage.getItem('highlightList') || '').split(';').filter(n => n.length > 0);
 
 var flags = new Map();
+const gridColors = [
+	"#xxxxxx",
+	"#AC725E",
+	"#D06B64",
+	"#F83A22",
+	"#FA573C",
+	"#FF7537",
+	"#FFAD46",
+	"#42D692",
+	"#16A765",
+	"#7BD148",
+	"#B3DC6C",
+	"#FBE983",
+	"#FAD165",
+	"#92E1C0",
+	"#9FE1E7",
+	"#9FC6E7",
+	"#4986E7",
+	"#9A9CFF",
+	"#B99AFF",
+	"#CABDBF",
+	"#CCA6AC",
+	"#F691B2",
+	"#CD74E6",
+	"#A47AE2"
+];
 
 try {
 	const stored = localStorage.getItem('ignoreList');
@@ -238,13 +261,17 @@ try {
 }
 
 function doDelete(entry) {
-	if (canDeleteVideo()) {
-		var index = entry.index();
-		var id = entry[0].video.videoid;
-		var data = { index: index, sanityid: id };
-		dbg("delVideo", data);
-		socket.emit("delVideo", data);
+	if (!canDeleteVideo()) {
+		return;
 	}
+
+	const data = { 
+		index: entry.index(), 
+		sanityid: entry[0].video.videoid 
+	};
+
+	dbg("delVideo", data);
+	socket.emit("delVideo", data);
 }
 
 function doRequeue(entry) {
@@ -254,7 +281,7 @@ function doRequeue(entry) {
 	if (controlsPlaylist()) {
 		var from = entry.index();
 		var to = ACTIVE.domobj.index();
-		var id = entry.data('plobject').videoid;
+		var id = entry[0].video.videoid;
 
 		if (from > to) { to++; }
 
@@ -277,24 +304,21 @@ function addVolatile(entry) {
 	}
 }
 function doVolatile(entry) {
-	if (canToggleVolatile()) {
-		var pos = entry.index();
-		var volat = true;
-		var id = entry.data('plobject').videoid;
-		if (entry.hasClass("volatile")) {
-			volat = false;
-		}
-		var data = {
-			action: "setVolatile",
-			info: {
-				pos: pos,
-				volat: volat
-			},
-			sanityid: id
-		};
-		dbg(data);
-		socket.emit("fondleVideo", data);
+	if (!canToggleVolatile()) {
+		return;
 	}
+
+	const volat = !entry[0].classList.contains('volatile');
+	const data = {
+		action: "setVolatile",
+		info: {
+			pos: entry.index(),
+			volat
+		},
+		sanityid: entry[0].video.videoid
+	};
+	dbg(data);
+	socket.emit("fondleVideo", data);
 }
 function doColorTag(entry, tag, volat) {
 	if (canColorTag()) {
@@ -671,7 +695,7 @@ function showConfigMenu(on) {
 function showUserActions(who) {
 
 	var who = $(who);
-	var target = who.data('nick');
+	var target = who[0].getAttribute('nick');
 
 	// Position this beast.
 	var cmds = $("body").dialogWindow({
@@ -884,13 +908,36 @@ function updateUserNote(nick, note) {
 		elem.removeClass('note');
 	}
 }
+
 function rmUser(nick) {
-	var o = $(`#chatlist ul li[nick="${nick}"]`);
-	if (o.length > 0) {
-		$(o[0]).remove();
-		delete CHATLIST[nick];
+	document.querySelector(`#chatlist ul li[nick="${nick}"]`)?.remove();
+	delete CHATLIST[nick];
+}
+
+function createColorGrid(volatile) {
+	const colorGrid = createElement('div', {class: 'colorGrid'});
+
+	for (const color of gridColors) {
+		const pixel = createElement('div', {class: 'swatch kill'});
+		const clear = color === '#xxxxxx';
+
+		if (!clear) {
+			pixel.classList.remove('kill')
+			pixel.style.backgroundColor = color
+		}
+
+		if (volatile) {
+			pixel.classList.add('volatile')
+		}
+
+		pixel.onclick = () => doColorTag(entry, clear ? false : color, false)
+		
+		colorGrid.append(
+			pixel
+		)
 	}
-	sortUserList();
+
+	return colorGrid
 }
 function addVideoControls(entry, optionList) {
 	const video = entry[0].video;
@@ -918,119 +965,63 @@ function addVideoControls(entry, optionList) {
 		});
 	}
 
-	// Open video on [player] button
-	if (video.videotype == "yt") {
-		var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-		$("<span/>").text("Open on YouTube").appendTo(optBtn);
-		optBtn.click(function () {
-			var vid = video.videoid;
-			window.open('https://youtu.be/' + vid, '_blank');
-		});
-	}
-	else if (video.videotype == "vimeo") {
-		var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-		$("<span/>").text("Open on Vimeo").appendTo(optBtn);
-		optBtn.click(function () {
-			var vid = video.videoid;
-			window.open('https://vimeo.com/' + vid, '_blank');
-		});
-	}
-	else if (video.videotype == "soundcloud") {
-		var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-		$("<span/>").text("Open on SoundCloud").appendTo(optBtn);
-		optBtn.click(function () {
-			var vid = video.meta.permalink;
-			if (vid) {
-				window.open(vid, '_blank');
-			}
-		});
-	}
-	else if (video.videotype == "dm") {
-		var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-		$("<span/>").text("Open on DailyMotion").appendTo(optBtn);
-		optBtn.click(function () {
-			var vid = video.videoid.substr(2);
-			window.open('https://www.dailymotion.com/video/' + vid, '_blank');
-		});
+	let info = ['', ''];
+
+	switch (video.videotype) {
+		case 'yt': info = ['yt', 'Youtube', `https://youtu.be/${video.videoid}`]; break;
+		case 'vimeo': info = ['vimeo', `https://youtu.be/${video.videoid}`]; break;
+		case 'dm': info = ['dm', `https://youtu.be/${video.videoid}`]; break;
+		case 'soundcloud': info = ['soundcloud', 'Soundcloud', video.meta.permalink]; break;
+		default:
+			break;
 	}
 
+	if (info[0].length > 0) {
+		const button = createElement(
+			'div', {class: 'button'},
+			createElement('span', {text: `Open on ${info[1]}`})
+		);
+	
+		button.onclick = () => {
+			if (video.videotype === 'soundcloud' && !info[2]) {
+				return;
+			}
+			
+			window.open(info[2], '_blank');
+		}
+		
+		optionList[0].append(
+			createElement('li', {}, button)
+		);
+	}
+
+
 	// Video end notification
-	if ($(entry).data('plobject') == ACTIVE) {
-		var optBtn = $('<div/>').addClass('button').appendTo($('<li/>').appendTo(optionList));
-		$('<span/>').text('Toggle video end notification').appendTo(optBtn);
-		optBtn.click(function () {
-			if (MONITORED_VIDEO != null) {
-				ACTIVE.domobj.removeClass('notify');
-				MONITORED_VIDEO = null;
-			}
-			else {
-				ACTIVE.domobj.addClass('notify');
-				MONITORED_VIDEO = ACTIVE;
-			}
-		});
+	if (entry[0].video == ACTIVE) {
+		const button = createElement('div', {class: 'button'},
+			createElement('span', {text: 'Toggle video end notification'})
+		);
+
+		button.onclick = function() {
+			ACTIVE.domobj[0].classList.toggle('notify', MONITORED_VIDEO === null)
+			MONITORED_VIDEO = MONITORED_VIDEO ? null : ACTIVE;
+		}
+
+		optionList[0].append(
+			createElement('li', {}, button)
+		);
 	}
 
 	// Color Tags
 	if (canColorTag()) {
 		$("<hr/>").appendTo($("<li/>").appendTo(optionList));
-		var colorGrid = $("<div/>").addClass("colorGrid").appendTo($("<li/>").appendTo(optionList));
-		var colors = [
-			"#xxxxxx",
-			"#AC725E",
-			"#D06B64",
-			"#F83A22",
-			"#FA573C",
-			"#FF7537",
-			"#FFAD46",
-			"#42D692",
-			"#16A765",
-			"#7BD148",
-			"#B3DC6C",
-			"#FBE983",
-			"#FAD165",
-			"#92E1C0",
-			"#9FE1E7",
-			"#9FC6E7",
-			"#4986E7",
-			"#9A9CFF",
-			"#B99AFF",
-			"#CABDBF",
-			"#CCA6AC",
-			"#F691B2",
-			"#CD74E6",
-			"#A47AE2"
-		];
-		for (var i = 0; i < colors.length; i++) {
-			(function (i) {
-				if (colors[i] == "#xxxxxx") {
-					$("<div/>").addClass("volatile swatch kill").appendTo(colorGrid).click(function () {
-						doColorTag(entry, false, true);
-					});
-				} else {
-					$("<div/>").addClass("volatile swatch").css("background-color", colors[i]).appendTo(colorGrid).click(function () {
-						doColorTag(entry, colors[i], true);
-					});
-				}
-			})(i);
-		}
-		$("<div/>").css("clear", "both").appendTo(colorGrid);
 
-		$("<hr/>").appendTo($("<li/>").appendTo(optionList));
-		var colorGrid = $("<div/>").addClass("colorGrid").appendTo($("<li/>").appendTo(optionList));
-		for (var i = 0; i < colors.length; i++) {
-			(function (i) {
-				if (colors[i] == "#xxxxxx") {
-					$("<div/>").addClass("swatch kill").appendTo(colorGrid).click(function () {
-						doColorTag(entry, false, false);
-					});
-				} else {
-					$("<div/>").addClass("swatch").css("background-color", colors[i]).appendTo(colorGrid).click(function () {
-						doColorTag(entry, colors[i], false);
-					});
-				}
-			})(i);
-		}
-		$("<div/>").css("clear", "both").appendTo(colorGrid);
+		optionList[0].append(
+			createElement('li', {},
+				createColorGrid(true),
+				createColorGrid(false)
+			)
+		)
 	}
 }
 
@@ -1373,7 +1364,9 @@ function createDeleteButton(entry) {
 
 	return element;
 }
+function createPlaylistContextMenu(dom) {
 
+}
 function createPlaylistItem(data) {
 	const item = createElement('li');
 	
@@ -1498,6 +1491,7 @@ function initPlaylist(parent) {
 		});
 		var optionList = $("<ul/>").addClass("optionList").appendTo(cmds);
 		addVideoControls(me, optionList);
+
 		if (optionList.children().length == 0) {
 			cmds.window.close();
 		}
@@ -1563,7 +1557,7 @@ function initFlairOpts() {
 	];
 
 	FLAIR_OPTS = flairs.map((flair, index) => {
-		return $('<div>', {class: `drinkflair flair_${index}`, title: flair}).data('flair_id', index);
+		return createElement('div', {class: `drinkflair flair_${index}`, title: flair, flair_id: index});
 	});
 }
 
@@ -1588,6 +1582,18 @@ function initChatControls(parent) {
 
 	initFlairOpts();
 	var flairMenuWrap = $('<div/>').attr('id', 'flairMenu').appendTo(chatControls);
+	
+	console.warn(
+		FLAIR_OPTS
+	)
+
+	flairMenuWrap[0].append(
+		createElement('div', {class: 'flairMenuItems hidden'},
+			...FLAIR_OPTS
+		)
+	);
+
+	/*
 	flairMenuWrap.click(function () {
 		flairMenuWrap.superSelect({
 			options: FLAIR_OPTS,
@@ -1603,6 +1609,7 @@ function initChatControls(parent) {
 			}
 		});
 	});
+	*/
 	var flairArrow = $('<div/>').attr('id', 'flairArrow').appendTo(chatControls);
 	flairArrow.click(function () {
 		flairMenuWrap.click();
@@ -1707,23 +1714,10 @@ function initChat(parent) {
 
 		this.value = '';
 	}
-	/*
-	chatinputbar.submit(function () {
-		if (canChat()) {
-			var msg = $(this).val();
-			sendChatMsg(msg, $(this));
-		} else {
-			var data = { nick: $(this).val(), pass: false };
-			$('#headbar').data('loginData', data);
-			socket.emit("setNick", data);
-			$(this).val("");
-		}
-	});
-	*/
+
 	// Because FUCK YOUR EYEBALLS
 	
 	var adminRainbow = $('<div id="adminRainbow"/>').html('<span style="color: #EE4144;">A</span><span style="color: #F37033;">D</span><span style="color: #FDF6AF;">M</span><span style="color: #62BC4D;">O</span><span style="color: #1E98D3;">P</span><span style="color: #672F89;">S</span>').appendTo(chatinput);
-	adminRainbow.css('display', 'none');
 
 	initPolls($(chatpane));
 	initChatControls($(chatpane));
@@ -1831,7 +1825,29 @@ function initLoginForm(headbar) {
 	
 	const 
 	table.querySelector('.submit').onclick = () => {
-		register.parentNode.classList.remove('hidden');
+		register.classList.remove('hidden');
+	}
+	const submitter = () => {
+		$('#headbar .loginError').html('');
+		var nick = this["loginname"].value;
+		var pass = this["loginpass"].value;
+		var pass2 = this["regpass2"]?.value;
+		
+		var data = { nick: nick, pass: pass };
+
+		if (pass2) {
+			data['pass2'] = pass2;
+		}
+
+		headbar.data('loginData', data);
+
+		if (pass2) {
+			socket.emit('registerNick', data);
+		} else {
+			socket.emit('setNick', data);
+		}
+		
+		return false;
 	}
 	*/
 
@@ -1892,6 +1908,8 @@ function initLoginForm(headbar) {
 		});
 	});
 
+
+
 	regForm.submit(function () {
 		//Handle register. Return false to prevent postback
 		$('#headbar .loginError').html('');
@@ -1923,8 +1941,8 @@ function initLoginForm(headbar) {
 	}
 }
 function initDrinkCounter(under) {
-	const wrap = createElement('div', {id: 'drinkWrap'}, 
-		createElement('div', {id: 'v'}),
+	const wrap = createElement('div', {id: 'drinkWrap', class: 'hidden'}, 
+		createElement('div', {id: 'v', class: 'hidden'}),
 		createElement('span', {}, 
 			'Current video has ',
 			createElement('span', {id: 'drinkCounter', text: '0'}),
@@ -2000,6 +2018,20 @@ function initPolls(under) {
 	under[0].after(
 		chat
 	);
+
+	/*
+	const table = createElement('table', {}, 
+		createElement('tr', {},
+			createElement('td', {},
+				createElement('label', {text: 'Poll Title'})
+			)
+		)
+	
+	);
+	const options = [
+		{title: 'Title', kind: ''}
+	]
+	*/
 
 	var table = $('<table/>').appendTo(controls.lastChild);
 
@@ -2219,20 +2251,6 @@ function initMailbox() {
 	document.body.append(
 		box
 	);
-
-	/*
-	$('body').append(
-		$('<div id="mailDiv"/>').append(
-			$('<div id="mailboxDiv"/>').css('display', 'none').append(
-				$('<div id="mailMessageDiv"/>'),
-				$('<div/>').css('text-align', 'center').append(
-					$('<button/>').addClass('btn').text('Clear').click(function () {
-						$('#mailMessageDiv').children().remove();
-						$('#mailButtonDiv').removeClass('new');
-						toggleMailDiv();
-					}))),
-			$('<div id="mailButtonDiv"/>').html('<img src="' + CDN_ORIGIN + '/images/envelope.png" alt="mail"></img>').click(toggleMailDiv)));
-	*/
 }
 $(function () {
 	dbg("page loaded, firing onload scripts");
@@ -2307,19 +2325,26 @@ $(function () {
 	initRCVOverlay($("#chatbuffer"));
 	initMailbox();
 
-	// Defaults.
-	if (getStorage('syncAtAll') == null) { setStorage('syncAtAll', 1); }
-	if (getStorage('syncAccuracy') == null) { setStorage('syncAccuracy', 2); }
-	if (getStorage('notifyMute') == null) { setStorage('notifyMute', 0); }
-	if (getStorage("storeAllSquees") === null) { setStorage("storeAllSquees", 1); }
-	if (getStorage('drinkNotify') == null) { setStorage('drinkNotify', 0); }
-	if (getStorage('legacyPlayer') == null) { setStorage('legacyPlayer', 0); }
-	if (getStorage('showTimestamps') == null) { setStorage('showTimestamps', 0); }
-	if (getStorage('showChatflair') == null) { setStorage('showChatflair', 1); }
-	if (getStorage('plFolAcVid') == null) { setStorage('plFolAcVid', 1); }
-	if (getStorage('keeppolls') == null) { setStorage('keeppolls', 5); }
-	if (getStorage('sbchatter') == null) { setStorage('sbchatter', 0); }
-	if (getStorage('nightMode') == null) { setStorage('nightMode', 1); }
+	const options = [
+		{key: 'syncAtAll', default: 1},
+		{key: 'syncAccuracy', default: 2},
+		{key: 'notifyMute', default: 0},
+		{key: 'storeAllSquees', default: 1},
+		{key: 'drinkNotify', default: 0},
+		{key: 'legacyPlayer', default: 0},
+		{key: 'showTimestamps', default: 0},
+		{key: 'showChatflair', default: 1},
+		{key: 'plFolAcVid', default: 1},
+		{key: 'keeppolls', default: 5},
+		{key: 'sbchatter', default: 0},
+		{key: 'nightMode', default: 1},
+	];
+
+	for (const opt of options) {
+		if (!getStorage(opt.key)) {
+			setStorage(opt.key, opt.default)
+		}
+	}
 
 	const body = document.body;
 

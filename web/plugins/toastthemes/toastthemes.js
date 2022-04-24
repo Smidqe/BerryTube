@@ -1232,25 +1232,25 @@ function sweetieCrawl() {
 			// Clear previous CSS, set fixed CSS
 			sb.css('top', '').css('margin-top', '').css('bottom', '100%').css('margin-bottom', '-70px');
 			// Set dynamic CSS
-			sb.css('right', crawlPercent + '%').css('margin-right', margin + 'px').css('-webkit-transform', 'rotate(180deg)').css('-moz-transform', 'rotate(180deg)');
+			sb.css('right', crawlPercent + '%').css('margin-right', margin + 'px').css('transform', 'rotate(180deg)');
 			break;
 		case 1: // Down
 			// Clear previous CSS, set fixed CSS
 			sb.css('right', '').css('margin-right', '').css('left', '100%').css('margin-left', '-70px');
 			// Set dynamic CSS
-			sb.css('bottom', crawlPercent + '%').css('margin-bottom', margin + 'px').css('-webkit-transform', 'rotate(270deg)').css('-moz-transform', 'rotate(270deg)');
+			sb.css('bottom', crawlPercent + '%').css('margin-bottom', margin + 'px').css('transform', 'rotate(270deg)');
 			break;
 		case 2: // Left
 			// Clear previous CSS, set fixed CSS
 			sb.css('bottom', '').css('margin-bottom', '').css('top', '100%').css('margin-top', '-70px');
 			// Set dynamic CSS
-			sb.css('left', crawlPercent + '%').css('margin-left', margin + 'px').css('-webkit-transform', 'rotate(0deg)').css('-moz-transform', 'rotate(0deg)');
+			sb.css('left', crawlPercent + '%').css('margin-left', margin + 'px').css('transform', 'rotate(0deg)');
 			break;
 		case 3: // Up
 			// Clear previous CSS, set fixed CSS
 			sb.css('left', '').css('margin-left', '').css('right', '100%').css('margin-right', '-70px');
 			// Set dynamic CSS
-			sb.css('top', crawlPercent + '%').css('margin-top', margin + 'px').css('-webkit-transform', 'rotate(90deg)').css('-moz-transform', 'rotate(90deg)');
+			sb.css('top', crawlPercent + '%').css('margin-top', margin + 'px').css('transform', 'rotate(90deg)');
 			break;
 	}
 

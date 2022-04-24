@@ -187,7 +187,28 @@
 	width: 40px;
 }
 
+.banZone .nothing {
+	width: 280px;
+	margin: 10px;
+}
+
 body.dragging * {
 	user-select: none;
 	touch-action: none;
+}
+
+#chatpane.admin #chatinput > input {
+	padding-left: 60px;
+}
+
+#chatpane.admin #adminRainbow {
+	display: block;
+}
+
+#chatpane:not(.admin) #adminRainbow {
+	display: none;
+}
+
+.controlWindow > p {
+	margin: 10px 5px 10px 5px;
 }

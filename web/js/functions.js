@@ -357,7 +357,7 @@ function showIgnoreDialog() {
 			addBanRow(name);
 		}
 	} else {
-		$('<div/>').text("You haven't ignored anyone. Right click on a user if you want to do so.").css('width', '280px').css('margin', '10px').appendTo(banZone);
+		$('<div/>', {class: 'nothing'}).text("You haven't ignored anyone. Right click on a user if you want to do so.").appendTo(banZone);
 	}
 
 	parent.window.center();
@@ -399,7 +399,7 @@ function showBanlistWindow() {
 	function loadExisting() {
 		dbg(BANLIST);
 		if (BANLIST.length == 0) {
-			$('<div/>').text("No one is banned. How crazy is that?").css('width', '280px').css('margin', '10px').appendTo(banZone);
+			$('<div/>', {class: 'nothing'}).text("No one is banned. How crazy is that?").appendTo(banZone);
 		}
 		else {
 			for (var i in BANLIST) {
@@ -425,43 +425,56 @@ function showBanlistWindow() {
 	waitForExisting();
 }
 function showBanDialog(nick) {
-	var parent = $("body").dialogWindow({
+	const parent = $("body").dialogWindow({
 		title: "Ban User",
 		uid: "banuser",
 		center: true
 	});
 
-	var mainOptWrap = $('<div/>').appendTo(parent).addClass('controlWindow');
-	$('<p>').appendTo(mainOptWrap).text("Applying ban to " + nick + ":").css('margin', '10px 5px 10px 5px');
-	var timeSelect = $('<select/>').appendTo(mainOptWrap).css('margin', '0px 5px 10px 5px');
-	$("<option/>").appendTo(timeSelect).data("time", 1).text("1 minute");
-	$("<option/>").appendTo(timeSelect).data("time", 5).text("5 minutes");
-	$("<option/>").appendTo(timeSelect).data("time", 30).text("30 minutes");
-	$("<option/>").appendTo(timeSelect).data("time", 60).text("1 hour");
-	$("<option/>").appendTo(timeSelect).data("time", 120).text("2 hours");
-	$("<option/>").appendTo(timeSelect).data("time", 180).text("3 hours");
-	$("<option/>").appendTo(timeSelect).data("time", 360).text("6 hours");
-	$("<option/>").appendTo(timeSelect).data("time", 540).text("9 hours");
-	$("<option/>").appendTo(timeSelect).data("time", 720).text("12 hours");
-	if (TYPE >= 2) {
-		$("<option/>").appendTo(timeSelect).data("time", -1).text("Permanent");
-	}
+	const options = [
+		{length: 1, text: '1 minute'},
+		{length: 5, text: '5 minute'},
+		{length: 30, text: '30 minute'},
+		{length: 60, text: '1 hour'},
+		{length: 120, text: '2 hours'},
+		{length: 180, text: '3 hours'},
+		{length: 360, text: '6 hours'},
+		{length: 540, text: '9 hours'},
+		{length: 720, text: '12 hours'},
+	];
+	
+	const main = $('<div>', {class: 'controlWindow'}).append(
+		//TODO: Move the margin into a css file instead of inlining
+		$('<p>', {text: `Applying ban to ${nick}:`}),
+		$('<select>').append(
+			//add options
+			...options.map(option => $('<option>', {text: option.text}).data('time', option.length)),
+			//add permaban if applicable
+			TYPE >= 2 ? $('<option>', {text: 'Permanent'}).data('time', -1) : undefined,
+		),
+		//add buttons
+		$('<div>').append(
+			$('<div>', {class: 'button', text: 'Cancel'}),
+			$('<div>', {class: 'button', text: 'Apply'}).data('apply', true),
+		)
+	).appendTo(parent);
 
-	var buttonDiv = $('<div/>').css("text-align", "center").appendTo(mainOptWrap);
-	var cancelBtn = $('<div/>').addClass('button').appendTo(buttonDiv);
-	$('<span/>').appendTo(cancelBtn).text("Cancel");
-	cancelBtn.click(function () {
-		parent.window.close();
-	});
-	var saveBtn = $('<div/>').addClass('button').appendTo(buttonDiv);
-	$('<span/>').appendTo(saveBtn).text("Apply");
-	saveBtn.click(function () {
-		socket.emit('ban', { nicks: [nick], ips: [$(`li[nick="${nick}"]`).attr('ip')], duration: timeSelect.find(':selected').data('time') });
+	//add event listeners
+	main.on('click', 'div.button', (ev) => {
+		if ($(ev.currentTarget).data('apply')) {
+			socket.emit('ban', { 
+				nicks: [nick], 
+				ips: [$('li.' + nick).attr('ip')], 
+				duration: main.find(':selected').data('time') 
+			});
+		}
+
 		parent.window.close();
 	});
 
 	parent.window.center();
 }
+
 function showCssOverrideWindow() {
 
 	var curOverride = $("body").data("cssOverride");
@@ -913,15 +926,14 @@ function handleACL() {
 		body.classList.toggle('berry', LEADER);
 
 		if (isRegisteredUser()) {
-			var headbar = $('#headbar');
-			var rememberMe = headbar.find('.rememberMe');
+			const me = document.querySelector('#headbar .rememberMe');
+			const headbar = me.closest('#headbar');
 			// If it doesn't exist we're a cached login.
 			// If it exists but is unchecked clear our local storage
 			// If it exists and is checked, cache login credentials.
-			if (rememberMe.length) {
-				rememberMe = rememberMe.is(':checked');
-				if (rememberMe) {
-					var data = headbar.data('loginData');
+			if (me) {
+				if (me.checked) {
+					var data = $(headbar).data('loginData');
 					if (typeof localStorage != 'undefined' && data) {
 						localStorage.setItem('nick', data.nick);
 						localStorage.setItem('pass', data.pass);
@@ -934,7 +946,10 @@ function handleACL() {
 					}
 				}
 			}
-			initLogoutForm(headbar.html(''));
+			
+
+			headbar.replaceChildren();
+			initLogoutForm($(headbar));
 		}
 
 		if (canSeeAdminLog()) {
@@ -967,7 +982,7 @@ function handleACL() {
 					onStart: function (event) {
 						console.warn(event)
 					},
-					onEnd: function (event, ui) {
+					onEnd: function (event) {
 						var data = {
 							from: event.oldIndex,
 							to: event.newIndex,
@@ -979,11 +994,11 @@ function handleACL() {
 				});
 
 				for (const node of playlist.childNodes) {
-					if (!node.querySelector('.requeue')) {
+					if (!node.firstChild?.classList.contains('.requeue')) {
 						node.append(createQueueButton(node));
 					}
 
-					if (canDelete && !node.querySelector('.delete')) {
+					if (canDelete && !node.lastChild?.classList.contains('.delete')) {
 						node.append(createDeleteButton(node));
 					}
 				}
@@ -1382,7 +1397,7 @@ function addChatMsg(data, _to) {
 			}
 		}
 
-		if (isSquee && ['act', 'sweetiebot', 'rcv', false].contains(data.msg.emote)) {
+		if (isSquee && ['act', 'sweetiebot', 'rcv', false].includes(data.msg.emote)) {
 			wrap.classList.add("highlight");
 			doSqueeNotify();
 			addNewMailMessage(nick, data.msg.msg);
@@ -1436,13 +1451,17 @@ function doSqueeNotify() {
 }
 
 function manageDrinks(drinks) {
+	console.warn(
+		drinks
+	)
+
 	//once #v exists so does #drinkCounter and #drinkWrap
 	whenExists('#drinkWrap > #v', (v) => {
 		const wrap = v[0].parentElement;
 		const counter = wrap.querySelector('#drinkCounter');
 		
-		wrap.style.display = drinks === 0 ? 'none' : 'block';
-		v[0].style.display = drinks > 9000 ? 'block' : 'none';
+		wrap.classList.toggle('hidden', drinks === 0);
+		v[0].classList.toggle('hidden', drinks <= 9000);
 
 		//added drink(s)
 		if (drinks && drinks !== DRINKS && getStorage('drinkNotify')) {
@@ -1453,6 +1472,7 @@ function manageDrinks(drinks) {
 		counter.textContent = DRINKS;
 	});
 }
+
 
 function handleNumCount(data) {
 	CONNECTED = data.num;
@@ -1536,6 +1556,16 @@ function toggleChatMode() {
 	}
 }
 function toggleMailDiv() {
+	/*
+	const mailbox = document.querySelector('#mailboxDiv');
+	const open = mailbox.classList.contains('hidden');
+
+	if (!open && open.children.length) {
+		mailbox.classList.remove('new');
+	}
+
+	mailbox.classList.toggle('hidden', !open)
+	*/
 	var mailboxDiv = $('#mailboxDiv');
 
 	if (mailboxDiv.css('display') == 'none' && $('#mailMessageDiv').children().length > 0) {
@@ -1599,7 +1629,7 @@ function plSearch(term) {
 			let name = decodeURI(elem.videotitle);
 			
 			if (name.match(rx)) {
-				console.log(name);
+				dbg(name);
 				var index = i - activeIndex;
 				if (index < 0) {
 					index = '(' + index + ') ';
@@ -1946,7 +1976,11 @@ function addVideo(data, queue, sanityid) {
 	const jq = $(entry);
 
 	data.domobj = jq;
-	jq.data('plobject', data);
+	entry.onDoubleClick = function() {
+		if (controlsVideo()) {
+			doPlaylistJump($(this))
+		}
+	}
 	jq.dblclick(function () {
 		if (controlsVideo()) {
 			doPlaylistJump($(this));
@@ -1958,9 +1992,48 @@ function addVideo(data, queue, sanityid) {
 	recalcStats();
 }
 function attachAreaEdit(elem, name) {
+	if (!canSetAreas()) {
+		return;
+	}
+
+	/*
+	const editbtn = createElement('button', {
+		class: 'editBtn',
+		text: 'Edit',
+	});
+
+	editbtn.onclick = function () {
+		elem.classList.add('area-editing');
+
+		const okbtn = createElement('button', {text: 'Save'});
+		const cancel = createElement('button', {text: 'Cancel'})
+		const wrap = createElement('div', {},
+			createElement('textarea'),
+			createElement('div', {}, 
+				okbtn,
+				cancel
+			)
+		)
+
+		okbtn.onclick = function() {
+			socket.emit("setAreas", {
+				content: wrap.firstChild.value,
+				areaname: name
+			});
+
+			elem.classList.remove('area-editing');
+		}
+
+		cancel.onclick = function() {
+			elem.classList.remove('area-editing');
+		}
+
+
+	}
+	*/
+
 	if (canSetAreas()) {
 		var orig = $(elem);
-		dbg(orig);
 		var editbtn = $('<button>Edit</button>').addClass("editBtn").insertAfter(orig);
 
 		editbtn.hover(function () {
@@ -2508,8 +2581,6 @@ function showChat(channel) {
 		case 'admin':
 			$('#adminbuffer').removeClass('inactive');
 			$('#admintab').removeClass('newmsg squee').addClass('active');
-			$('#chatinput input').css('padding-left', '60px');
-			$('#adminRainbow').css('display', 'block');
 			$('#chatpane').addClass('admin');
 			if (ADMIN_NOTIFY) {
 				clearInterval(ADMIN_NOTIFY);
@@ -2519,8 +2590,6 @@ function showChat(channel) {
 		default:
 			$('#chatbuffer').removeClass('inactive');
 			$('#maintab').removeClass('newmsg squee').addClass('active');
-			$('#chatinput input').css('padding-left', '0px');
-			$('#adminRainbow').css('display', 'none');
 			if (MAIN_NOTIFY) {
 				clearInterval(MAIN_NOTIFY);
 				$('#chatpane').removeClass('squee');
@@ -2629,7 +2698,6 @@ function sortPlaylist(data) {
 			PLAYLIST.insertAfter(toelem, fromelem);
 			fromelem.domobj.hide("blind", function () {
 				fromelem.domobj.insertAfter(toelem.domobj).show("blind", function () {
-					fromelem.domobj.css("display", "list-item");
 					setVal("sorting", false);
 				});
 			});
@@ -2637,7 +2705,6 @@ function sortPlaylist(data) {
 			PLAYLIST.insertBefore(toelem, fromelem);
 			fromelem.domobj.hide("blind", function () {
 				fromelem.domobj.insertBefore(toelem.domobj).show("blind", function () {
-					fromelem.domobj.css("display", "list-item");
 					setVal("sorting", false);
 				});
 			});

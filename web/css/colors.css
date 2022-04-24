@@ -83,9 +83,10 @@ body {
 .flair_8 { background-position: 0 -128px; }
 .flair_9 { background-position: 0 -144px; }
 .flair_10 { background-position: 0 -160px;}
-
 /** https://dribbble.com/shots/2979958-MyLacroix-com-Stickers licensed under CC BY 3.0 US */
-.flair_11{background: url(/images/flair.png?v2) no-repeat 0 -176px !important;}
+.flair_11 {background-position: 0 -176px;}
+
+
 .dd-jquery{
 	display:none;
 }
@@ -200,12 +201,7 @@ body {
     top: 359px;
     z-index: 1;
 }
-#chatinput input {
-    padding: 0 5px;
-	-moz-box-sizing: border-box;
-	-webkit-box-sizing: border-box;
-	box-sizing: border-box;
-}
+
 #chatinput input.loading {
     background:url(/images/textloader.gif) no-repeat right center;
 }
@@ -432,7 +428,6 @@ form .submit:hover {
 	color: white !important;
 }
 #v{
-	display:none;
 	background:url(/images/v.jpg);
 	width:604px;
 	height:350px;

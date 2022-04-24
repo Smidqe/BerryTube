@@ -84,7 +84,7 @@ function wutProcessUsername(nick){
 
 			var c = wutGetUsercolor(nick);
 			wutAddedStyles.push(nick);
-			wutStyleSheet.insertRule(`.msgwrap[nick="${nick}"] { border-style: solid;  border-width: 0; border-left-width: 10px ; border-left-color : ${c} }`,0);
+			wutStyleSheet.insertRule(`.msgwrap[nick="${nick}"]:not(.drinkWrap) { border-style: solid;  border-width: 0; border-left-width: 10px ; border-left-color : ${c} }`,0);
 			wutStyleSheet.insertRule(`.msgwrap[nick="${nick}"] > .message { margin-left:5px;position:relative;z-index:2; }`,0);
 			wutStyleSheet.insertRule(`.msgwrap[nick="${nick}"] > .message > .nick:not(.flaunt) { color: ${c}; }`,0);
 		
@@ -128,34 +128,37 @@ function wutReloadUserColors(){
       if(wutStyles !== null)
         wutStyles.remove();
 
-      wutStyles = document.createElement("style");
-      wutAddedStyles = [];
-
-      wutStyles.appendChild(document.createTextNode(""));
-      document.head.appendChild(wutStyles);
-
-      wutStyleSheet = wutStyles.sheet;
-      wutStyles.setAttribute('id', 'wutColorStyles');
-
-      wutStyleSheet.insertRule("#chatControls { z-index: 3;} ",0);
-      wutStyleSheet.insertRule("#chatlist > ul > li:not(.me) { border-bottom-width: 0; }",0);
-      wutStyleSheet.insertRule("#chatlist > ul > li { border-right-width: 0; border-top-width: 0; }",0);
-      wutStyleSheet.insertRule("#wutColorRefresh { border: 0; background-color: transparent;width: 24px;height: 24px;opacity: 0.5; }",0);
-      wutStyleSheet.insertRule("#wutColorRefresh:hover { opacity: 1; }",0);
-      wutStyleSheet.insertRule("#wutColorRefresh > img { width: 16px; height: 16px; }",0);
-
+		requestAnimationFrame(() => {
+			wutStyles = document.createElement("style");
+			wutAddedStyles = [];
 	  
-      var chatUsers = $('span.nick').text().split(':').concat(
-        $('span.chatlistname').toArray().map(function(k){
-          return $(k).text();
-        })
-      ).wutUniquefyArray();
+			wutStyles.appendChild(document.createTextNode(""));
+			document.head.appendChild(wutStyles);
+	  
+			wutStyleSheet = wutStyles.sheet;
+			wutStyles.setAttribute('id', 'wutColorStyles');
+	  
+			wutStyleSheet.insertRule("#chatControls { z-index: 3;} ",0);
+			wutStyleSheet.insertRule("#chatlist > ul > li:not(.me) { border-bottom-width: 0; }",0);
+			wutStyleSheet.insertRule("#chatlist > ul > li { border-right-width: 0; border-top-width: 0; }",0);
+			wutStyleSheet.insertRule("#wutColorRefresh { border: 0; background-color: transparent;width: 24px;height: 24px;opacity: 0.5; }",0);
+			wutStyleSheet.insertRule("#wutColorRefresh:hover { opacity: 1; }",0);
+			wutStyleSheet.insertRule("#wutColorRefresh > img { width: 16px; height: 16px; }",0);
+	  
+			
+			var chatUsers = $('span.nick').text().split(':').concat(
+			  $('span.chatlistname').toArray().map(function(k){
+				return $(k).text();
+			  })
+			).wutUniquefyArray();
+	  
+			wutRefreshLight(getComputedStyle(document.querySelector('#chatbuffer')).backgroundColor);
+			
+			for (const user of chatUsers) {
+				wutProcessUsername(user)
+			}
+		})
 
-      wutRefreshLight(getComputedStyle(document.querySelector('#chatbuffer')).backgroundColor);
-      
-	  for (const user of chatUsers) {
-		  wutProcessUsername(user)
-	  }
 
     });
   });

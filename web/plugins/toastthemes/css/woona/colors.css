@@ -65,7 +65,6 @@ body {
 	background: transparent url(images/tracking_dot.png) repeat-x 0 0;
 }
 #v {
-	display: none;
 	background: url(images/v.png);
 	width: 604px;
 	height: 350px;

@@ -24,10 +24,7 @@
 50% {border-color: #ed27ff;}
 75% {border-color: #d400eb;}
 100% {border-color: #732C7B;}}
-/*#global-zeroclipboard-flash-bridge, #global-zeroclipboard-flash-bridge:focus,#global-zeroclipboard-flash-bridge::-moz-focus-inner, #global-zeroclipboard-flash-bridge:active {
-    outline:0 !important;
-    border:none !important;
-}*/
+
 .copyCaption{
     font-size:9px;
     margin:0px 3px;
@@ -104,9 +101,6 @@
 }
 #toggleTimes.timesOn.loading{
 animation: pulse 3s ease-in-out infinite;
--o-animation: pulse 3s ease-in-out infinite;
--moz-animation: pulse 3s ease-in-out infinite;
--webkit-animation: pulse 3s ease-in-out infinite;
 }
 /*#playlist ul li.alarm .time{*/
     /*[>outline:1px solid yellow;    <]*/
@@ -196,27 +190,17 @@ animation: pulse 3s ease-in-out infinite;
 .alertNote{
     font-size:70%;
 }
-/*#global-zeroclipboard-html-bridge{
-    max-width:100% !important;
-    max-height:100% !important;
-}*/
 
 /*fix accidental selection gliching*/
 #playlist {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
   user-select: none;
   z-index: 1;
   overflow-y:hidden;
-  width: auto !important;
   resize: vertical;
   padding-bottom: 0px;
   position: relative;
   min-height:377px
-  }
+}
 
 
 #playlist * {
@@ -225,10 +209,7 @@ animation: pulse 3s ease-in-out infinite;
     position:absolute;
     bottom:0px;
     padding:0px 10px 0px 3px;
-    width: -moz-calc(100% - 15px) !important;
-    width: -o-calc(100% - 15px) !important;
-    width: -webkit-calc(100% - 15px) !important;
-    width: calc(100% - 15px) !important;
+    width: calc(100% - 15px);
 }
 #plstats {pointer-events: none;}
 #plstats * {pointer-events: auto;}
@@ -239,43 +220,31 @@ animation: pulse 3s ease-in-out infinite;
     float:left;
 }
 #searchbox {
-  background:inherit !important;
   position: absolute;
   width: 100%;
   bottom: 1.3em; }
 
 #playlist .viewport {
   min-height:350px;
-  width: -moz-calc(100% - 20px) !important;
-  width: -o-calc(100% - 20px) !important;
-  width: -webkit-calc(100% - 20px) !important;
-  width: calc(100% - 20px) !important;
-  height: -moz-calc(100% - 27px) !important;
-  height: -o-calc(100% - 27px) !important;
-  height: -webkit-calc(100% - 27px) !important;
-  height: calc(100% - 27px) !important;
-   }
+}
   #playlist .viewport .overview, #playlist .viewport .overview ul {
     width: 100%; }
 #searchbox{background-color:none}
 
 /*chat only forces the the scrollbar over the resize handle. Let's fix that*/
 /* throw in body as a selector, weight intensifies!*/
+
+/**
 body #playlist .scrollbar{
-        height: -moz-calc(100% - 27px) !important;
-        height: -o-calc(100% - 27px) !important;
-        height: -webkit-calc(100% - 27px) !important;
         height: calc(100% - 27px) !important;
         position:absolute !important;
         right:0px !important;
         top:0px !important;
         float:none !important;
 }
+**/
 body #playlist .track{
     float:none !important;
  }
-body #leftpane{
-height:auto !important;
-min-height: 0 !important;
- }
+
 #playlist .viewport .overview{padding-bottom:20px}

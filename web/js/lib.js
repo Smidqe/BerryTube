@@ -123,7 +123,7 @@ function confirmClick(node, cb) {
 		var windows = $(parent).data('windows');
 		if(typeof windows == "undefined"){
 			$(parent).data('windows',[]);
-			windows = $(parent).data('windows');
+			windows = [];
 		}
 
 		// Remove old window if new uid matches an old one.
@@ -132,7 +132,9 @@ function confirmClick(node, cb) {
 
 			if (win) {
 				win.close();
-
+				console.warn(
+					'closing!'
+				)
 				//prevent double close
 				$(document).unbind("mouseup.rmWindows");
 			}
@@ -162,23 +164,7 @@ function confirmClick(node, cb) {
 		newWindow.setLoaded = function(){
 			$(newWindow).find(".loading").remove();
 		};
-		newWindow.winFocus = function(){
-			var highestWindow = false;
-			var highestWindowZ = 0;
-			var windows = $(parent).data('windows');
-			for(var i in windows){
-				if($(windows[i]) == $(this)) continue;
-				var hisZ = $(windows[i]).css('z-index');
-				if(hisZ > highestWindowZ){
-					highestWindow = $(windows[i]);
-					highestWindowZ = parseInt(hisZ);
-				}
-			}
-			if($(highestWindow) !== $(this)){
-				var newval = (highestWindowZ+1);
-				$(this).css('z-index',newval);
-			}
-		};
+
 		newWindow.refreshWindowOffset = function(){
 			if(myData.center){
 				newWindow.center();
@@ -209,9 +195,6 @@ function confirmClick(node, cb) {
 				newWindow.offset(offset);
 			}
 		};
-		newWindow.mousedown(function(){
-			newWindow.winFocus();
-		});
 
 		windows.push(newWindow);
 
@@ -223,6 +206,8 @@ function confirmClick(node, cb) {
 					container.close();
 					$(document).unbind("mouseup.rmWindows");
 				}
+
+				console.warn('closing!')
 			});
 		}
 
@@ -276,9 +261,9 @@ function confirmClick(node, cb) {
 
 		// Handle block for loading.
 		if(data.initialLoading){
-			var block = $('<div/>').addClass("loading").prependTo(newWindow);
+			$('<div/>').addClass("loading").prependTo(newWindow);
 		}
-		newWindow.winFocus();
+
 		newWindow.refreshWindowOffset();
 		newWindow.fadeIn('fast', function() {
 			newWindow.refreshWindowOffset();
@@ -289,10 +274,15 @@ function confirmClick(node, cb) {
 })(jQuery);
 
 jQuery.fn.center = function () {
-	const win = $(window);
-    this.css("position","absolute");
-    this.css("top", Math.max(0, ((win.height() - this.outerHeight()) / 2) + win.scrollTop()) + "px");
-    this.css("left", Math.max(0, ((win.width() - this.outerWidth()) / 2) + win.scrollLeft()) + "px");
+	
+
+	requestAnimationFrame(() => {
+		const win = $(window);
+		this.css("position","absolute");
+		this.css("top", Math.max(0, ((win.height() - this.outerHeight()) / 2) + win.scrollTop()) + "px");
+		this.css("left", Math.max(0, ((win.width() - this.outerWidth()) / 2) + win.scrollLeft()) + "px");
+	})
+
     return this;
 };
 

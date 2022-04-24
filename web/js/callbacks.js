@@ -178,6 +178,7 @@ socket.on("delVideo", function (data) {
 	recalcStats();
 });
 socket.on("setLeader", function (data) {
+	console.warn(data)
 	if (data && !LEADER) {
 		addChatMsg(
 			{
@@ -263,10 +264,15 @@ socket.on(
 			return;
 		}
 
+		const leaders = Array.from(document.querySelectorAll('.leader'))
+		for (const nick of data.nicks) {
+			
+		}
+		console.warn(data)
 		whenExists("#chatlist ul li", function (obj) {
 			$(obj).removeClass("leader");
 			$(obj).each(function (key, val) {
-				if (data.nicks.includes($(val).data("nick"))) {
+				if (data.nicks.includes(val.getAttribute("nick"))) {
 					$(val).addClass("leader");
 				}
 			});
@@ -278,22 +284,20 @@ socket.on(
 	}
 );
 socket.on("setVidVolatile", function (data) {
-	pos = data.pos;
-	isVolat = data.volat;
-	setVidVolatile(pos, isVolat);
+	setVidVolatile(data.pos, data.volat);
 });
 socket.on("setVidColorTag", function (data) {
-	var pos = data.pos;
-	var tag = data.tag;
-	var volat = data.volat;
-	setVidColorTag(pos, tag, volat);
+	setVidColorTag(data.pos, data.tag, data.volat);
 });
 socket.on("kicked", function (reason) {
+	
 	var msg = "You have been kicked";
 	if (reason) {
-		msg += ": " + reason;
+		msg += `: ${reason}`;
 	}
-	$('<div/>').addClass("kicked").text(msg).appendTo($('.chatbuffer'));
+	document.querySelector('.chatbuffer').append(
+		createElement('div', {class: 'kicked', text: msg})
+	);
 });
 socket.on('serverRestart', function () {
 	onSocketReconnecting('serverRestart');
@@ -400,7 +404,8 @@ socket.on('searchHistoryResults', function (data) {
 	for (var i in data) {
 		var vid = data[i];
 		var entry = $("<li/>").addClass('history').appendTo(plul);
-		entry.data('plobject', vid);
+
+		entry[0].video = vid;
 		vid.domobj = entry;
 
 		$("<div/>").addClass('title').text(decodeURIComponent(vid.videotitle)).appendTo(entry);
@@ -461,18 +466,17 @@ socket.on('searchHistoryResults', function (data) {
 		}).appendTo(entry);
 
 		entry.bind("contextmenu", function (e) {
-			var me = $(this);
 			var cmds = $("body").dialogWindow({
 				title: "Video Options",
 				uid: "videomenu",
 				offset: {
-					top: e.pageY,
-					left: e.pageX
+					top: e.pageY - 5,
+					left: e.pageX - 5
 				},
 				toolBox: true
 			});
 
-			const video = me[0].video;
+			const video = this.video;
 			let info = ['', ''];
 
 			switch (video.videotype) {
@@ -486,10 +490,8 @@ socket.on('searchHistoryResults', function (data) {
 
 			if (info[0] === '') {
 				cmds.window.close();
-				return false;
 			}
 
-			const option = createElement('ul', {class: 'optionList'});
 			const button = createElement(
 				'div', {class: 'button'},
 				createElement('span', {text: `Open on ${info[1]}`})
@@ -502,6 +504,12 @@ socket.on('searchHistoryResults', function (data) {
 				
 				window.open(info[2], '_blank');
 			}
+			
+			cmds[0].append(
+				createElement('ul', {class: 'optionList'},
+					createElement('li', {}, button)
+				)
+			);
 
 			return false;
 		});
