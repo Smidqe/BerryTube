@@ -248,7 +248,7 @@ function showAdminFilterWindow() {
 		mainOptWrap.data('convertedRules', convertedRules);
 		if (canSetFilters()) {
 			socket.emit("setFilters", convertedRules);
-			highlight(saveBtn);
+			highlight(saveBtn[0]);
 		}
 	});
 
@@ -562,7 +562,7 @@ function showCustomSqueesWindow() {
 			}
 			localStorage.setItem('highlightList', nameList);
 		}
-		highlight(saveBtn);
+		highlight(saveBtn[0]);
 	});
 
 	for (var i in HIGHLIGHT_LIST) {
@@ -1987,7 +1987,7 @@ function addVideo(data, queue, sanityid) {
 		}
 	});
 
-	highlight(jq);
+	highlight(jq[0]);
 	revertLoaders();
 	recalcStats();
 }
@@ -2527,7 +2527,11 @@ function revertLoaders() {
 	});
 }
 function highlight(elem) {
-	$(elem).effect("highlight", {}, 1000);
+	elem.classList.add('highlight');
+	
+	setTimeout(() => {
+		elem.classList.remove('highlight')
+	}, 1000)
 }
 
 function scrollToPlEntry(index) {
@@ -2598,6 +2602,9 @@ function showChat(channel) {
 	}
 
 	scrollBuffersToBottom();
+
+	/*
+	*/
 }
 
 function cycleChatTab(left) {

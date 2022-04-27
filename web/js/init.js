@@ -2193,6 +2193,9 @@ function initPolls(under) {
 	}
 
 	function getOptions() {
+		console.warn(
+			canvas
+		)
 		const opWraps = canvas[0].querySelectorAll(".optionWrap");
 		const ret = [];
 
