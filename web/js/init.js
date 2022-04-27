@@ -1410,9 +1410,15 @@ function createPlaylistItem(data) {
 	item.append(
 		createElement('div', {class: 'title', text: decodeURIComponent(data.videotitle).replace(/&amp;/g, '&')}),
 		createElement('div', {class: 'time', text: secToTime(data.videolength)}),
-		createQueueButton(item),
-		createDeleteButton(item)
 	);
+
+	if (controlsPlaylist()) {
+		item.append(createQueueButton(item))
+	}
+
+	if (canDeleteVideo()) {
+		item.append(createDeleteButton(item))
+	}
 
 	if (data.volat) {
 		item.classList.add('volatile');

@@ -980,6 +980,12 @@ function handleACL() {
 					playlist.sortable("enable");
 				} else {
 					playlist.addClass("previouslyEnabled");
+					playlist.find("li").each(function () {
+						this.append(
+							createQueueButton(this),
+							createDeleteButton(this)
+						);
+					});
 					playlist.sortable({
 						start: function (event, ui) {
 							PLAYLIST_DRAGFROM = ui.item.index();
