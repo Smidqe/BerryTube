@@ -147,7 +147,7 @@ var MOD = false;
 var NAME = false;
 var TIME = new Date();
 var TYPE = -1;
-var CHATLIST = {};
+var CHATLIST = new Map();
 var TOGGLEABLES = {};
 var IGNORELIST = [];
 var CONNECTED = 0;
@@ -160,7 +160,6 @@ var FLAIR_OPTS = [];
 var HISTORY_POS = 0;
 var HISTORY_SIZE = 50;
 var LAST_EMIT_STATE = -1;
-var WINDOW_FOCUS = false;
 var CHAT_NOTIFY = false;
 var VIDEO_TYPE = false;
 var MY_FLAIR_ID = 0;
@@ -194,6 +193,7 @@ var DEBUG_DUMPS = [];
 var HIGHLIGHT_LIST = (localStorage.getItem('highlightList') || '').split(';').filter(n => n.length > 0);
 
 var flags = new Map();
+//const CHATLIST = new Map();
 const gridColors = [
 	"#xxxxxx",
 	"#AC725E",
@@ -247,15 +247,15 @@ try {
 			window.location = "ban.php";
 		} else {
 			$(function () {
-				var AWSHIT = $("<center><h1>Unable to connect Socket.IO: " + reason + "</h1></center>").prependTo(document.body);
+				$("<center><h1>Unable to connect Socket.IO: " + reason + "</h1></center>").prependTo(document.body);
 			});
 			console.error(reason);
 		}
 	});
 } catch (e) {
 	$(function () {
-		var debugging = $("<center><h3>" + e + "</h3></center>").prependTo(document.body);
-		var AWSHIT = $("<center><h1>Aw shit! Couldn't connect to the server!</h1></center>").prependTo(document.body);
+		$("<center><h3>" + e + "</h3></center>").prependTo(document.body);
+		$("<center><h1>Aw shit! Couldn't connect to the server!</h1></center>").prependTo(document.body);
 	});
 	console.error(e);
 }
@@ -293,16 +293,7 @@ function doRequeue(entry) {
 	}
 	setVal("sorting", false);
 }
-function addVolatile(entry) {
-	if (canToggleVolatile() && $('> .setVolatile', entry).length == 0) {
-		var qbtn = $("<div/>").prependTo(entry);
-		qbtn.text("V");
-		qbtn.addClass('setVolatile');
-		qbtn.click(function () {
-			doVolatile(entry);
-		});
-	}
-}
+
 function doVolatile(entry) {
 	if (!canToggleVolatile()) {
 		return;
@@ -833,13 +824,17 @@ function showEditNote(nick) {
 	parent.window.center();
 }
 function addUser(data, sortafter, animate = false) {
-	if (CHATLIST[data.nick] !== undefined) {
+	if (CHATLIST.has(data.nick)) {
 		return;
 	}
 
-	console.warn(
-		data, sortafter, animate
-	)
+	const typeMappings = new Map([
+		[-1, "anon"],
+		[0, "user"],
+		[1, "assistant"],
+		[2, "admin"]
+	]);
+
 	whenExists('#chatlist ul', function (chatul) {
 		const user = createElement(
 			'li', {nick: data.nick}, 
@@ -864,15 +859,13 @@ function addUser(data, sortafter, animate = false) {
 			user.classList.add('sbanned');
 		}
 
-		switch (data.type) {
-			case -1: user.classList.add("anon"); break;
-			case 0: user.classList.add("user"); break;
-			case 1: user.classList.add("assistant"); break;
-			case 2: user.classList.add("admin"); break;
-		}
+		user.classList.add(typeMappings.get(data.type));
 
 		if (data.type !== -2) {
-			CHATLIST[data.nick] = 0;
+			CHATLIST.set(data.nick, {
+				lastMessage: 0,
+				type: typeMappings.get(data.type)
+			});
 
 			user.onclick = () => showUserActions($(user));
 			user.oncontextmenu = () => {
@@ -911,7 +904,7 @@ function updateUserNote(nick, note) {
 
 function rmUser(nick) {
 	document.querySelector(`#chatlist ul li[nick="${nick}"]`)?.remove();
-	delete CHATLIST[nick];
+	CHATLIST.delete(nick);
 }
 
 function createColorGrid(volatile) {
@@ -1593,13 +1586,12 @@ function initChatControls(parent) {
 		)
 	);
 
-	/*
 	flairMenuWrap.click(function () {
 		flairMenuWrap.superSelect({
 			options: FLAIR_OPTS,
 			callback: function (selected) {
 				dbg(selected);
-				var newId = $(selected).data('flair_id');
+				var newId = selected.getAttribute('flair_id');
 				if (typeof newId == "undefined") {
 					newId = 0;
 				}
@@ -1609,7 +1601,7 @@ function initChatControls(parent) {
 			}
 		});
 	});
-	*/
+
 	var flairArrow = $('<div/>').attr('id', 'flairArrow').appendTo(chatControls);
 	flairArrow.click(function () {
 		flairMenuWrap.click();
@@ -1659,12 +1651,12 @@ function initChat(parent) {
 	)
 
 
-	parent[0].append(
+	parent.append(
 		pane
 	)
 
 
-	inputbar.onkeyup = function (e) {
+	inputbar.addEventListener('keydown', function (e) {
 		if (e.keyCode !== 9) {
 			let self = $(this);
 			self.data('tabcycle', false);
@@ -1696,7 +1688,7 @@ function initChat(parent) {
 				HISTORY[HISTORY_POS] = this.value;
 			}
 		}
-	};
+	});
 
 	inputbar.onsubmit = function() {
 		if (canChat()) {
@@ -1717,7 +1709,7 @@ function initChat(parent) {
 
 	// Because FUCK YOUR EYEBALLS
 	
-	var adminRainbow = $('<div id="adminRainbow"/>').html('<span style="color: #EE4144;">A</span><span style="color: #F37033;">D</span><span style="color: #FDF6AF;">M</span><span style="color: #62BC4D;">O</span><span style="color: #1E98D3;">P</span><span style="color: #672F89;">S</span>').appendTo(chatinput);
+	$('<div id="adminRainbow"/>').html('<span style="color: #EE4144;">A</span><span style="color: #F37033;">D</span><span style="color: #FDF6AF;">M</span><span style="color: #62BC4D;">O</span><span style="color: #1E98D3;">P</span><span style="color: #672F89;">S</span>').appendTo(chatinput);
 
 	initPolls($(chatpane));
 	initChatControls($(chatpane));
@@ -2317,13 +2309,15 @@ $(function () {
 	});
 
 	//initPlaylist($("#leftpane"));
-	initChat($("#rightpane"));
-	var p = $("#videobg");
-	if (p.length > 0) {
-		initDrinkCounter(p);
-	} else {
-		initDrinkCounter($("#videowrap"));
-	}
+	initChat(document.querySelector('#rightpane'));
+	
+	const elements = [
+		document.querySelector('#videobg'),
+		document.querySelector('#videowrap')
+	]
+
+	initDrinkCounter(elements[0] || elements[1]);
+
 	initAreas();
 	initRCVOverlay($("#chatbuffer"));
 	initMailbox();
@@ -2364,26 +2358,16 @@ $(function () {
 		document.querySelector('#flairMenu').classList.add(`flair_${MY_FLAIR_ID}`);
 	}
 
-	$(window).focus(function () {
-		WINDOW_FOCUS = true;
-		windowFocused();
-	})
-		.blur(function () {
-			WINDOW_FOCUS = false;
-			windowBlurred();
-		});
-	$("body").click(function () {
-		WINDOW_FOCUS = true;
-		windowFocused();
-	});
-
 	document.addEventListener('visibilitychange', function () {
+		window.flags.set('focused', !document.hidden);
+
 		if (document.hidden) {
-			windowHidden();
-		} else {
 			windowShown();
+			windowFocused();
+		} else {
+			windowHidden();
 		}
-	}, false);
+	});
 
 	$(".chatbuffer")
 		.mouseenter(function () { KEEP_BUFFER = false; })
@@ -2401,7 +2385,8 @@ $(function () {
 			return Array.from(node.childNodes).map(collectCopy).join(' ');
 		}
 	}
-	$('body').on('copy', event => {
+	
+	document.body.addEventListener('copy', (event) => {
 		try {
 			// if the selection is entirely outside the chat buffers, don't customize
 			if (Array.from(document.querySelectorAll('.chatbuffer')).every(buffer => !document.getSelection().containsNode(buffer, true))) {

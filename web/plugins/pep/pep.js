@@ -485,7 +485,7 @@ setPlaylistPosition = function(to){
 };
 
 PEP.titleFlash = function(title){
-  if (!WINDOW_FOCUS) {
+  if (!window.flags.get('focused')) {
     clearInterval(CHAT_NOTIFY);
     CHAT_NOTIFY = setInterval(function() {
       if (document.title == WINDOW_TITLE) {

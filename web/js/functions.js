@@ -1202,9 +1202,11 @@ function scrollBuffersToBottom() {
 
 function addChatMsg(data, _to) {
 	whenExists(_to, function (to) {
-
 		// Added for a safe event hook for handling addons, etc.
 		btEvents.emit("chat", data);
+
+		//const [nick, msg, meta, isGhost] = [data.msg.nick, data.msg.msg, data.msg.metadata, data.ghost]
+		//const message = data.msg;
 
 		// New format cause fuck all that argument shit. know whats cool? Objects.
 		var nick = data.msg.nick;
@@ -1231,14 +1233,15 @@ function addChatMsg(data, _to) {
 			return;
 		}
 
-		const user = document.querySelector(`#chatlist [nick="${nick}"]`);
+		//TODO: Replace this with information in CHATLIST (faster and easier)
+		const user = CHATLIST.get(nick);
 		const isSquee = metadata.isSquee || (nick != NAME && NAME.length > 0 && detectName(NAME, msgText));
 		
 		let includeTimestamp = false;
 
 		if (user) {
 			wrap.classList.add(
-				...user.getAttribute('class').split(' ')
+				...user.type
 			);
 		}
 
@@ -1304,11 +1307,9 @@ function addChatMsg(data, _to) {
 				message.append(
 					createElement('span', {class: 'nick', text: `${nick}:`}),
 					createElement('span', {class: 'msg'}),
-					createElement('span')
-				);
-
-				message.lastChild.append(
-					formatChatMsg(msgText)
+					createElement('span', {}, 
+						formatChatMsg(msgText)
+					)
 				);
 
 				wrap.madeAt = new Date().getTime();
@@ -1410,7 +1411,7 @@ function addChatMsg(data, _to) {
 		var d = new Date(data.msg.timestamp);
 
 		if (user) {
-			CHATLIST[nick] = d.getTime();
+			user.lastMessage = d.getTime();
 		}
 
 		if (includeTimestamp) {
@@ -1434,7 +1435,7 @@ function addChatMsg(data, _to) {
 	});
 }
 function doSqueeNotify() {
-	if (!WINDOW_FOCUS) {
+	if (!window.flags.get('focused')) {
 		if (getStorage('notifyMute') == 0) {
 			NOTIFY.play();
 		}
@@ -1578,7 +1579,7 @@ function toggleMailDiv() {
 	}
 }
 function addNewMailMessage(nick, msg) {
-	if (!WINDOW_FOCUS || getStorageToggle("storeAllSquees")) {
+	if (!window.flags.get('focused') || getStorageToggle("storeAllSquees")) {
 		var newMsg = $('<div/>').addClass('mail');
 		var now = new Date();
 		newMsg.append(
@@ -1997,39 +1998,42 @@ function attachAreaEdit(elem, name) {
 	}
 
 	/*
-	const editbtn = createElement('button', {
-		class: 'editBtn',
-		text: 'Edit',
-	});
+	const editBtn = createElement('button', {text: 'Edit', class: 'editBtn'})
+	const buttons = createElement('div', {}, 
+		createElement('button', {class: 'areaSave', text: 'Save'}),
+		createElement('button', {class: 'areaCancel', text: 'Cancel'})
+	),
+	const editor = createElement('div', {class: 'areaEditWrap'},
+		createElement('textarea'),
+		buttons
+	);
 
-	editbtn.onclick = function () {
-		elem.classList.add('area-editing');
+	buttons[0].onclick = function() {
+		const textarea = this.parentNode.previousSibling;
 
-		const okbtn = createElement('button', {text: 'Save'});
-		const cancel = createElement('button', {text: 'Cancel'})
-		const wrap = createElement('div', {},
-			createElement('textarea'),
-			createElement('div', {}, 
-				okbtn,
-				cancel
-			)
-		)
+		socket.emit("setAreas", {
+			content: textarea.value,
+			areaname: name
+		});
 
-		okbtn.onclick = function() {
-			socket.emit("setAreas", {
-				content: wrap.firstChild.value,
-				areaname: name
-			});
-
-			elem.classList.remove('area-editing');
-		}
-
-		cancel.onclick = function() {
-			elem.classList.remove('area-editing');
-		}
-
-
+		elem[0].classList.remove('editing');
+		this.closest('.areaEditWrap')?.remove();
 	}
+
+	buttons[1].onclick =  function() {
+		elem[0].classList.remove('editing');
+		this.closest('.areaEditWrap')?.remove();
+	}
+
+	editBtn.onclick = function() {
+		elem[0].append(
+			editor
+		);
+
+		elem[0].classList.add('editing');
+		editor.firstChild.innerHTML = elem[0].innerHTML;
+	}
+
 	*/
 
 	if (canSetAreas()) {
@@ -2042,23 +2046,6 @@ function attachAreaEdit(elem, name) {
 			orig.css("background-image", "none");
 		});
 
-		/*
-		const editbtn = createElement('button', {
-			class: 'editBtn',
-			text: 'Edit',
-		});
-
-		editbtn.
-		editbtn.onclick = () => {
-			const wrap = createElement('div', {}
-				createElement('textarea'),
-				createElement('div', {}, 
-					createElement('button', {text: 'Save'})
-					createElement('button')
-				)
-			)
-		}
-		*/
 		editbtn.click(function () {
 
 			var minheight = 100;
@@ -2320,7 +2307,7 @@ function parseVideoURL(url, callback) {
 	var m = url.match(new RegExp("\\.mpd")); if (m) { callback(url, "dash"); return; }
 	var m = url.match(new RegExp("\\.m3u8$")); if (m) { callback(url, "hls", "~ Raw Livestream ~"); return; }
 	var m = url.match(new RegExp("\\.json[^\\/]*$")); if (m) { callback(url, "manifest"); return; }
-	var m = url.match(new RegExp("\\.(?:mp4|m4v|webm)?[^\\/]*$")); if (m) { callback(url, "file"); return; }
+	var m = url.match(new RegExp("\\.(?:mp4|m4v|webm|mov)?[^\\/]*$")); if (m) { callback(url, "file"); return; }
 	// ppshrug
 	callback(url, "yt");
 }
@@ -2336,7 +2323,7 @@ function formatChatMsg(msg, greentext) {
 		node.setAttribute('rel', 'noopener noreferrer')
 	});
 
-	if (greentext && message.textContent.match(/^>/)) {
+	if (greentext && message.startsWith('>', 0)) {
 		message.classList.add('green')
 	}
 
@@ -2448,65 +2435,57 @@ function detectName(nick, msg) {
 		list += HIGHLIGHT_LIST[i];
 	}
 	list = '(' + list + ')';
+	//list = `(${[nick ?? '', HIGHLIGHT_LIST.join('|')})`;
 
 	return (msg.match(RegExp("(^|[^-a-zA-Z0-9_])" + list + "([^a-zA-Z0-9_]|$)", 'i')) != null);
 }
 function tabComplete(elem) {
+	console.warn('tab')
 	var chat = elem.val();
 	var tabOptions = elem.data('tabcycle');
 	var hasTabOptions = (tabOptions !== undefined && tabOptions != false);
-	var who = '';
 	var result = [];
 
 	if (!hasTabOptions) {
 		var onlyword = /^([^ ]*)$/i;
 		var endword = /([^ ]+)$/i;
 		var m = chat.match(endword);
-		if (m) {
-			who = m[1];
-		}
-		else {
+
+		if (!m) {
 			return;
 		}
 
+		const who = m[1];
+
 		var re = new RegExp('^' + who + '.*', 'i');
-		for (var prop in CHATLIST) {
-			m = prop.match(re);
-			if (m) {
-				var index = 0;
-				while (index < result.length) {
-					if (CHATLIST[prop] > result[index].lastchat ||
-						(CHATLIST[prop] == result[index].lastchat && prop.toLowerCase() < result[index].nick)) {
-						break;
-					}
-					index++;
-				}
-				result.splice(index, 0, { nick: prop, lastchat: CHATLIST[prop] });
+
+		for (const [key, value] of CHATLIST.entries()) {
+			if (key.match(re)) {
+				result.push({nick: key, lastchat: value.lastMessage})
 			}
 		}
 
-		if (result.length == 1) {
-			x = chat.replace(endword, result[0].nick);
+		//sort to newest to oldest
+		result.sort((a, b) => a.lastchat - b.lastchat);
+
+		const sanitize = (str) => {
+			str = chat.replace(endword, str);
 			if (chat.match(onlyword)) {
-				x += ": ";
+				str += ": ";
 			}
 			else {
-				x += " ";
+				str += " ";
 			}
-			elem.val(x);
+
+			return str;
+		}
+
+		if (result.length == 1) {
+			elem.val(sanitize(result[0].nick));
 		}
 		else if (result.length > 1) {
-			tabOptions = [];
-			for (var i in result) {
-				var x = chat.replace(endword, result[i].nick);
-				if (chat.match(onlyword)) {
-					x += ": ";
-				}
-				else {
-					x += " ";
-				}
-				tabOptions.push(x);
-			}
+			tabOptions = result.map((usr) => sanitize(usr.nick));
+
 			elem.data('tabcycle', tabOptions);
 			elem.data('tabindex', 0);
 			hasTabOptions = true;
@@ -2514,10 +2493,10 @@ function tabComplete(elem) {
 	}
 
 	if (hasTabOptions) {
-		var index = elem.data('tabindex');
+		const index = elem.data('tabindex');
+
 		elem.val(tabOptions[index]);
-		index = (index + 1) % tabOptions.length;
-		elem.data('tabindex', index);
+		elem.data('tabindex', (index + 1) % tabOptions.length);
 	}
 }
 function revertLoaders() {

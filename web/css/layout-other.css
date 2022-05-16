@@ -1075,3 +1075,6 @@ td > div#passwordbtn {
 	margin: 3px;
 }
 
+.edit-hover {
+	background-image: url("/images/attn.png");
+}

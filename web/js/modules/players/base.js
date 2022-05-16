@@ -83,6 +83,7 @@ export class Base {
 	}
 
 	event(event, data) {
+		console.warn(event, data);
 		switch (event) {
 			case Event.End: window.videoEnded(); break; 
 			case Event.Pause: window.videoPaused(); break;

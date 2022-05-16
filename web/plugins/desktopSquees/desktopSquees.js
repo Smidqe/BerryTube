@@ -83,7 +83,7 @@ var dsPunchChat = function(){
         var msgText = data.msg.msg;
         var isGhost = data.ghost;
         if(nick != NAME && NAME.length > 0 && detectName(NAME, msgText) &&
-          !(IGNORELIST.indexOf(nick) != -1 || (IGNORE_GHOST_MESSAGES && isGhost) || WINDOW_FOCUS) ){
+          !(IGNORELIST.indexOf(nick) != -1 || (IGNORE_GHOST_MESSAGES && isGhost) || window.flags.get('focused')) ){
             desktopSquee(nick + ": " + $("<div/>").html(msgText).text());//this ensure it treats it as html and not a selector
         }
         dsOldaddChatMsg(data,_to);

@@ -112,7 +112,7 @@ export class Raw extends Base {
 
 	event(event, data) {
 		switch (event) {
-			case Event.Volume: data.volume = this.player.volume(); break;
+			case Event.Volume: data.volume = this.player.muted() ? 0 : this.player.volume(); break;
 			case Event.Pause: this.state = State.PAUSED; break;
 			case Event.Play: this.state = State.PLAYING; break;
 			case Event.Seek: data.time = this.player.currentTime(); break;
@@ -153,7 +153,7 @@ export class Raw extends Base {
 		this.video = {id, meta, timestamp, sync: length > 0};
 	
 		//clear frame and add player
-		super.frame().replaceChildren(this.frame);
+		super.frame().replaceChildren(this.frame.cloneNode(true));
 
 		this.player = window.videojs(this.frame.id, this.config);
 		this.sources = this.getSources(id, meta.manifest);
