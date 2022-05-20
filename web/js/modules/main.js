@@ -2,6 +2,7 @@ import { RankedPoll } from "./ranked-poll.js";
 import { loadWorker } from "./lib.js";
 import { VolumeManager } from "./volume.js";
 import { Players } from "./player.js";
+import { TokenManager } from "./token.js";
 
 // header countdown
 loadWorker(window.WORKER_URLS.countdown).addEventListener("message", ({ data }) => {
@@ -23,6 +24,7 @@ loadWorker(window.WORKER_URLS.countdown).addEventListener("message", ({ data }) 
 // ranked poll API
 let activePoll = null;
 
+window.token = new TokenManager();
 window.volume = new VolumeManager();
 window.rankedPolls = {
 	createRankedPoll(state, mountElement) {

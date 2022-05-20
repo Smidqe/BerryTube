@@ -221,6 +221,11 @@ socket.on("setType", function (data) {
 	TYPE = data;
 	handleACL();
 });
+socket.on("setToken", function (data) {
+	onModuleLoaded(() => {
+		window.token.set(data);
+	});
+});
 socket.on("newChatList", function (data) {
 	initChatList(data);
 });
@@ -556,6 +561,7 @@ socket.on('forceRefresh', function (data) {
 	}, delay);
 });
 socket.on('shitpost', function (data) {
+	console.log('shitpost', data);
 	const parts = data.msg.split(' ');
 	switch (parts[0].toLowerCase()) {
 		case 'roll':
@@ -567,6 +573,22 @@ socket.on('shitpost', function (data) {
 			setTimeout(function () {
 				rollTarget.css('animation', '');
 			}, 1500 + 100);
+			break;
+		case 'ikea':
+			const target = $(`#chatbuffer .msgwrap[data-uuid=${data.randomMessage}] .msg`).filter(':not(.ikea)')[0];
+			if (!target) {
+				return;
+			}
+
+			target.classList.add('ikea');
+			if (getComputedStyle(target).display === 'inline') {
+				target.classList.add('ikea-inline');
+			}
+
+			setTimeout(function() {
+				target.classList.remove('ikea');
+				target.classList.remove('ikea-inline');
+			}, 1000 * (5 + 2 + 3) + 100);
 			break;
 	}
 });

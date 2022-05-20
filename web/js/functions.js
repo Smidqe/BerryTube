@@ -667,7 +667,7 @@ function showVideoRestrictionDialog(data) {
 		{key: 'restricted', is: data.restricted, canForce: false},
 		{key: 'unembeddable', is: data.noembed, canForce: false},
 		{key: 'ageblock', is: data.ageRestricted, canForce: false},
-		{key: 'geoblock', is: data.countryNames || data.countries, canForce: true},
+		{key: 'geoblock', is: data.geoblock, canForce: true},
 	];
 
 	//get the matched conditions
@@ -690,7 +690,7 @@ function showVideoRestrictionDialog(data) {
 			case 'unembeddable': return "The video you attempted to queue cannot be embedded.";
 			case 'geoblock': {
 				let countryText;
-				const countries = data.countryNames || data.countries;
+				const countries = data.geoblock.countryNames || data.geoblock.countries;
 
 				if (Array.isArray(countries)) {
 					countryText = countries.join(', ');
@@ -701,8 +701,13 @@ function showVideoRestrictionDialog(data) {
 				} else {
 					countryText = countries;
 				}
-		
-				return `The video you attempted to queue is restricted in the following countries: ${countryText}`;
+				
+				if (data.geoblock.kind === 'whitelist') {
+					return `The video you attempted to queue is only visible in these countries: ${countryText}`;
+				} else {
+					return `The video you attempted to queue is restricted in the following countries: ${countryText}`;
+				}
+				
 			}
 			case 'ageblock': return 'Video cannot be queued due it being age restricted.';
 		}
@@ -2299,7 +2304,7 @@ function parseVideoURL(url, callback) {
 	var m = url.match(new RegExp("\\.f4m$")); if (m) { callback(url, "osmf", "~ Raw Livestream ~"); return; }
 	var m = url.match(new RegExp("vimeo.com/([^&]+)")); if (m) { callback(m[1], "vimeo"); return; }
 	var m = url.match(new RegExp("(https?://soundcloud.com/[^/]+/[^/?]+)")); if (m) { callback(m[1], "soundcloud"); return; }
-	var m = url.match(new RegExp("https://watch.cloudflarestream.com/([a-z0-9]+)")); if (m) { callback(`https://cloudflarestream.com/${m[1]}/manifest/video.mpd`, "dash", "~ Raw Livestream ~"); return; }
+	var m = url.match(new RegExp("(?:videodelivery\\.net|cloudflarestream\\.com)/([a-z0-9]+)")); if (m) { callback(m[1], "cloudflare", "~ Raw Livestream ~"); return; }
 	
 	var m = url.match(new RegExp("v\\.redd\\.it/([^/]+)")); if (m) {callback(`https://v.redd.it/${m[1]}/DASHPlaylist.mpd`, "reddit", "~ Reddit Video ~"); return; }
 	var m = url.match(new RegExp("\\.reddit\\.com/")); if (m) {callback(url, "reddit", "~ Reddit Video ~"); return; }
