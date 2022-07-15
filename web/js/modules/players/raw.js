@@ -156,13 +156,8 @@ export class Raw extends Base {
 		super.frame().replaceChildren(this.frame.cloneNode(true));
 
 		this.player = window.videojs(this.frame.id, this.config);
-		this.sources = this.getSources(id, meta.manifest);
 	
-		//if we have multiple sources/qualities, add the quality selector 
-		if (this.sources.length > 1) {
-			this.player.controlBar.addChild('QualitySelector');
-		}
-	
+		this.prepare(id, meta);
 		this.ready(() => {
 			this.player.volume(volume);
 	
@@ -176,16 +171,20 @@ export class Raw extends Base {
 		});
 	}
 
-	playVideo(id, timestamp, _, length, meta) {
-		this.player.controlBar.removeChild('QualitySelector');
-
-		this.video = {id, timestamp, meta, sync: length > 0};
+	prepare(id, meta) {
 		this.sources = this.getSources(id, meta.manifest);
 
 		if (this.sources.length > 1) {
 			this.player.controlBar.addChild('QualitySelector');
+		} else {
+			this.player.controlBar.removeChild('QualitySelector');
 		}
+	}
 
+	playVideo(id, timestamp, _, length, meta) {
+		this.video = {id, timestamp, meta, sync: length > 0};
+
+		this.prepare(id, meta);
 		this.ready(() => {
 			this.player.src(this.sources);
 			this.delay(timestamp);

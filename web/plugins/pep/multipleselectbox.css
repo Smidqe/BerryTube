@@ -61,7 +61,7 @@
 	display: inline-block;
 	/* for IE6 and IE7 */
 	*display: inline;
-	zoom: 1;
+	
 	vertical-align: middle;
 }
 

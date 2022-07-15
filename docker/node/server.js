@@ -162,13 +162,67 @@ LinkedList.Circular.prototype.toArray = function () {
 	return out;
 };
 
+LinkedList.Circular.prototype.some = function(cb) {
+	return this.find(cb) !== null;
+}
+
+LinkedList.Circular.prototype.find = function(cb) {
+	let video = this.first;
+
+	for (let i = 0; i < this.length; i++) {
+		if (cb(video, i)) {
+			return video;
+		}
+
+		video = video.next;
+	}
+
+	return null;
+}
+LinkedList.Circular.prototype.multiple = function(indexes) {
+	let map = new Map(
+		indexes.map(i => [i, null])
+	);
+
+	let video = this.first;
+	let max = Math.max(...indexes);
+
+	for (let i = 0; i <= max; i++) {
+		if (map.has(i)) {
+			map.set(i, video);
+		}
+
+		video = video.next;
+	}
+
+	return indexes.map(i => map.get(i));
+}
+LinkedList.Circular.prototype.at = function(index) {
+	let video = this.first;
+
+	for (let i = 0; i < index; i++) {
+		video = video.next;
+	}
+
+	return video;
+}
+
+LinkedList.Circular.prototype.each = function(cb) {
+	let video = this.first;
+
+	for (let i = 0; i < this.length; i++) {
+		cb(video, i);
+		video = video.next;
+	}
+}
+
+
 /* VAR INIT */
 SERVER.PLAYLIST = new LinkedList.Circular();
 SERVER.ACTIVE = null;
 SERVER.LIVE_MODE = false;
 SERVER.AREAS = [];
 SERVER.STATE = 1;
-SERVER.LOCKDOWN = false;
 SERVER.TIME = 0 - SERVER.settings.vc.head_time; // referring to time
 SERVER._TIME = 0; // Previous tick time.
 SERVER.OUTBUFFER = {};
@@ -177,7 +231,6 @@ SERVER.FILTERS = [];
 SERVER.DRINKS = 0;
 SERVER.FAILED_LOGINS = [];
 SERVER.RECENTLY_REGISTERED = [];
-SERVER.GILDNAME = "*";
 
 // sets where our log output goes for our default logger...
 DefaultLog.addLogger(
@@ -231,20 +284,19 @@ function initPlaylist(callback) {
 }
 function initResumePosition(callback) {
 	getMisc({ name: 'server_active_videoid' }, function (old_videoid) {
-		var elem = SERVER.PLAYLIST.first;
-		for (var i = 0; i < SERVER.PLAYLIST.length; i++) {
-			if (elem.id() == old_videoid) {
-				SERVER.ACTIVE = elem;
-				getMisc({ name: 'server_time' }, function (old_time) {
-					if (+old_time) {
-						SERVER.TIME = +old_time + 1;
-					}
-					if (callback) { callback(); }
-				});
-				return;
-			}
-			elem = elem.next;
+		const active = SERVER.PLAYLIST.find(video => video.id() === old_videoid);
+
+		if (active) {
+			SERVER.ACTIVE = active;
+
+			getMisc({ name: 'server_time' }, function (old_time) {
+				if (+old_time) {
+					SERVER.TIME = +old_time + 1;
+				}
+				if (callback) { callback(); }
+			});
 		}
+
 		if (callback) { callback(); }
 	});
 }
@@ -256,26 +308,26 @@ function upsertMisc(data, callback) {
 		if (callback) { callback(); }
 	});
 }
-function getMisc(data, callback) {
-	var val = "";
-	var sql = `select * from misc where name = ?`;
-	mysql.query(sql, [data.name], function (err, result, fields) {
-		if (err) {
-			DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-			return;
-		}
-		if (result.length == 1) {
-			var row = result[0];
-			try {
-				val = row.value;
-			} catch (e) {
-				val = "";
-				DefaultLog.error(events.EVENT_GENERAL, `Bad stored misc. Blah. ${data.name}`);
-			}
-		}
-		if (callback) { callback(val); }
-	});
+async function getMisc(data, callback) {
+	const {result} = await databaseService.query`
+		SELECT 
+			* 
+		FROM 
+			misc 
+		WHERE 
+			name = ${data.name.trim()}`;
+
+	if (!result || result.length === 0) {
+		return null;
+	}
+
+	if (callback) {
+		callback(result[0].value)
+	}
+
+	return result[0].value;
 }
+
 function initHardbant(callback) {
 	getMisc({ name: 'hardbant_ips' }, function (ips) {
 		if (ips) {
@@ -396,6 +448,9 @@ function setAreas(areaname, content) {
 		name: areaname,
 		html: content
 	};
+
+
+
 	SERVER.AREAS.push(newArea);
 	sendAreas(io.sockets);
 }
@@ -420,40 +475,32 @@ function doorStuck(socket) {
 	socket.emit('doorStuck');
 }
 function playNext() {
-	const active = {
-		position: getVideoPosition(SERVER.ACTIVE),
-		node: SERVER.ACTIVE
-	};
+	const previous = SERVER.ACTIVE;
 
 	SERVER.ACTIVE = SERVER.ACTIVE.next;
 
-	if (!active.node.volat && 'colorTagVolat' in active.node.meta) {
-		setVideoColorTag(active.node, active.position, false, false);
-	}
+	previous.removeTag(true);
 
-	if (active.node.volat) {
-		delVideo(active);
+	if (previous.volatile()) {
+		delVideo(previous);
 	}
 
 	handleNewVideoChange();
 	sendStatus("forceVideoChange", io.sockets);
 }
 function prepareBans() {
-	var i = SERVER.BANS.length;
-	while (i--) {
+	const now = new Date().getTime();
 
-		if (SERVER.BANS[i].duration == -1) { continue; }
-
-		//CHECK DURATION AND TIME, REMOVE BAN IF APPROPRIATE
-		// Ban duration is in minutes, so multiply all values by 60 seconds, and 1000 millis, for 60000
-		var d = SERVER.BANS[i].duration * 60000;
-		var now = new Date().getTime();
-
-		if ((now - SERVER.BANS[i].bannedOn) >= d) {
-			//Ban expired.
-			SERVER.BANS.splice(i, 1);
+	SERVER.BANS = SERVER.BANS.filter(ban => {
+		if (ban.duration === -1) {
+			return true;
 		}
-	}
+
+		//ban expired
+		if (now - ban.bannedOn >= ban.duration * 60000) {
+			return false;
+		}
+	})
 }
 function augmentBan(ban, o) {
 
@@ -612,12 +659,11 @@ function handleNewVideoChange() {
 
 	resetDrinks();
 	resetTime();
-	// Is this a livestream? if so, stop ticking.
-	if (SERVER.ACTIVE.duration() == 0) {
-		SERVER.LIVE_MODE = true;
-	} else {
-		SERVER.STATE = 1; // Play.
-		SERVER.LIVE_MODE = false;
+
+	SERVER.LIVE_MODE = SERVER.ACTIVE.duration() == 0;
+
+	if (SERVER.LIVE_MODE) {
+		SERVER.STATE = 1;
 	}
 }
 function sendDrinks(socket) {
@@ -634,7 +680,7 @@ function resetDrinks() {
 	sendDrinks(io.sockets);
 }
 function resetTime() {
-	SERVER.TIME = (0 - SERVER.settings.vc.head_time);
+	SERVER.TIME = -SERVER.settings.vc.head_time;
 }
 function addDrink(amount, socket, callback) {
 	SERVER.DRINKS += parseFloat(amount);
@@ -766,14 +812,11 @@ function setVideoColorTag(socket, elem, tag, volat) {
 }
 
 function banUser(data, mod = undefined) {
-	var required = ['ips', 'nicks', 'duration']; // nick and ip should be arrays, even if single-element
-	data.bannedOn = new Date().getTime();
-
-	for (const elem in required) {
-		if (!(required[elem] in data)) {
-			return;
-		}
+	if (['ips', 'nicks', 'duration'].some(n => !(n in data))) {
+		return;
 	}
+	
+	data.bannedOn = new Date().getTime();
 
 	var existing = isUserBanned(data);
 
@@ -880,7 +923,7 @@ const chatCommandMap = {
 	// /kick nlaq
 	...withAliases(["kick", "k"], (parsed, socket, _messageData) => {
 		if (!authService.can(socket.session, actions.ACTION_KICK_USER)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot kick users");
 			return doSuppressChat;
 		}
 
@@ -900,7 +943,7 @@ const chatCommandMap = {
 	// what does this even do
 	...withAliases(["shitpost"], (parsed, socket, messageData) => {
 		if (!authService.can(socket.session, actions.ACTION_SHITPOST)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot shitpost");
 			return doSuppressChat;
 		}
 
@@ -927,7 +970,7 @@ const chatCommandMap = {
 		if (
 			!authService.can(socket.session, actions.ACTION_CAN_RESET_PASSWORD)
 		) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot reset a password");
 			return doSuppressChat;
 		}
 
@@ -1153,47 +1196,13 @@ function sendToggleables(socket) {
 	var data = {};
 	for (var key in SERVER.settings.toggles) {
 		if (SERVER.settings.toggles.hasOwnProperty(key)) {
-			data[key] = {};
-			data[key].label = SERVER.settings.toggles[key][1];
-			data[key].state = SERVER.settings.toggles[key][0];
+			data[key] = {
+				label: SERVER.settings.toggles[key][1],
+				state: SERVER.settings.toggles[key][0]
+			};
 		}
 	}
 	socket.emit("setToggleables", data);
-}
-
-function getVideoPosition(node) {
-	let video = SERVER.PLAYLIST.first;
-
-	for (let index = 0; index < SERVER.PLAYLIST.length; index++) {
-		if (video === node) {
-			return index;
-		}
-
-		video = video.next;
-	}
-
-	return -1;
-}
-
-function getVideoAt(index) {
-	if (index < 0 || index > SERVER.PLAYLIST.length) {
-		return null;
-	}
-
-	let video = SERVER.PLAYLIST.first;
-
-	for (let i = 0; i < SERVER.PLAYLIST.length; i++) {
-		if (i === index) {
-			return {
-				position: index,
-				node: video
-			};
-		}
-
-		video = video.next;
-	}
-
-	return null;
 }
 
 function saveToHistory(node) {
@@ -1215,47 +1224,46 @@ function saveToHistory(node) {
 }
 
 function delVideo(video, sanity, socket) {
-	const {node, position} = video;
-
-	if (node.deleted) {
+	if (video.deleted) {
 		return;
 	}
 
-	if (sanity && node.videoid !== sanity) {
+	if (sanity && video.id() !== sanity) {
 		return doorStuck(socket);
 	}
 
 	try {
-		SERVER.PLAYLIST.remove(node);
+		SERVER.PLAYLIST.remove(video);
+		
 		io.sockets.emit('delVideo', {
 			position,
-			sanityid: node.videoid
+			sanityid: video.id()
 		});
 		
 		const query = `delete from ${SERVER.dbcon.video_table} where videoid = ? limit 1`;
 
-		mysql.query(query, [String(node.videoid)], function (err) {
+		mysql.query(query, [String(video.id())], function (err) {
 			if (err) {
 				DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql: query }, err);
 				return;
 			}
 
 			//save to history if not a livestream
-			if (node.videolength > 0) {
-				saveToHistory(node);
+			if (video.videolength > 0) {
+				saveToHistory(video);
 			}
 		});
 
-		node.deleted = true;
+		video.deleted = true;
 
 		DefaultLog.info(events.EVENT_ADMIN_DELETED_VIDEO,
 			"{mod} deleted {title}",
-			{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(node.videotitle) });
+			{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()) });
 
 	} catch (e) {
 		DefaultLog.error(events.EVENT_ADMIN_DELETED_VIDEO,
 			"{mod} could not delete {title}",
-			{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(node.videotitle) }, e);
+			{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()) }, e);
 	}
 }
 
@@ -1352,6 +1360,8 @@ io.sockets.on('connection', function (ioSocket) {
 			"{mod} edited filters",
 			{ mod: getSocketName(socket), type: "site" });
 
+		//validate and complain if necessary
+
 		SERVER.FILTERS = data;
 	});
 	socket.on("searchHistory", async function (data) {
@@ -1436,7 +1446,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on('getFilters', function () {
 		if (!authService.can(socket.session, actions.ACTION_GET_FILTERS)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot get filters");
 			return;
 		}
 
@@ -1444,12 +1454,12 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on('setToggleable', function (data) {
 		if (!authService.can(socket.session, actions.ACTION_SET_TOGGLEABLS)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot set a toggleable");
 			return;
 		}
 
-		tn = data.name;
-		ts = data.state;
+		let tn = data.name;
+		let ts = data.state;
 		setToggleable(socket, tn, ts, function (err) {
 			const logData = { mod: getSocketName(socket), type: "site", name: tn, state: ts ? "on" : "off" };
 
@@ -1479,11 +1489,17 @@ io.sockets.on('connection', function (ioSocket) {
 	socket.on("chat", async data => {
 		const { session: { type, nick }, ip } = socket;
 
-		if (typeof (nick) !== "string" || !ip) { throw kick("You must be logged in to chat"); }
+		if (typeof (nick) !== "string" || !ip) { 
+			throw kick("You must be logged in to chat"); 
+		}
 
-		if (typeof (data) !== "object" || typeof (data.msg) !== "string") { throw kick("Expected data"); }
-
-		if (type < userTypes.ANONYMOUS || nick === '[no username]') { throw kick("Sending messages straight to socket"); }
+		if (typeof (data) !== "object" || typeof (data.msg) !== "string") { 
+			throw kick("Expected data"); 
+		}
+		
+		if (type < userTypes.ANONYMOUS || nick === '[no username]') { 
+			throw kick("Your session is broken, most likely network related. Refresh"); 
+		}
 
 		const { metadata: metaAttempt, msg } = data;
 		if (msg.length > SERVER.settings.core.max_chat_size) { throw kick(`Message length exeeds max size of ${SERVER.settings.core.max_chat_size}`); }
@@ -1507,7 +1523,7 @@ io.sockets.on('connection', function (ioSocket) {
 		});
 
 		function kick(message) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, message);
 			return new Error(message);
 		}
 	});
@@ -1632,7 +1648,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("playNext", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot skip a video");
 			return;
 		}
 
@@ -1644,33 +1660,21 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("sortPlaylist", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot move videos");
 			return;
 		}
 
-		if (data.from == data.to) { return; } //wat.
-		if (data.from < 0 || data.to < 0) { return; } //wat.
-		var elem = SERVER.PLAYLIST.first;
-		var fromelem, toelem;
-		for (var i = 0; i < SERVER.PLAYLIST.length; i++) {
-			if (i == data.from) {
-				fromelem = elem;
-				break;
-			}
-			elem = elem.next;
+		const [from, to] = SERVER.PLAYLIST.multiple([data.from, data.to]);
+
+		if (from.id() !== data.sanityid) {
+			return doorStuck(socket);
 		}
-		if (data.sanityid && elem.id() != data.sanityid) { return doorStuck(socket); }
-		elem = SERVER.PLAYLIST.first;
-		for (var i = 0; i < SERVER.PLAYLIST.length; i++) {
-			if (i == data.to) {
-				toelem = elem;
-				break;
-			}
-			elem = elem.next;
+
+		if (data.to > data.from) {
+			SERVER.PLAYLIST.insertAfter(to, from)
+		} else {
+			SERVER.PLAYLIST.insertBefore(to, from);
 		}
-		SERVER.PLAYLIST.remove(fromelem);
-		if (data.to > data.from) { SERVER.PLAYLIST.insertAfter(toelem, fromelem); }
-		else { SERVER.PLAYLIST.insertBefore(toelem, fromelem); }
 
 		io.sockets.emit("sortPlaylist", data);
 
@@ -1680,44 +1684,22 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("forceVideoChange", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot change the video");
 			return;
 		}
 
-		let prev = null;
-		let next = null;
+		const target = SERVER.PLAYLIST.at(data.index);
 
-		let video = SERVER.PLAYLIST.first;
-		for (let index = 0; index < SERVER.PLAYLIST.length; index++) {
-			if (video === SERVER.ACTIVE) {
-				prev = {node: video, position: index};
-			}
-
-			if (index === data.index) {
-				next = {node: video, position: index};
-			}
-
-			if (next && prev) {
-				break;
-			}
-
-			video = video.next;
-		}
-
-		//check if we actually got both
-		if (!next || !prev) {
+		if (!target) {
 			return doorStuck(socket);
 		}
 
-		if (data.sanityid && next.node.videoid !== data.sanityid) {
+		if (data.sanityid && target.videoid !== data.sanityid) {
 			return doorStuck(socket);
 		}
 
-		if (!prev.node.volat && 'colorTagVolat' in prev.node.meta) {
-			setVideoColorTag(prev.node, prev.position, false, false);
-		}
-	
-		SERVER.ACTIVE = next.node;
+		SERVER.ACTIVE.removeTag(true);
+		SERVER.ACTIVE = target;
 	
 		DefaultLog.info(events.EVENT_ADMIN_FORCED_VIDEO_CHANGE,
 			"{mod} forced video change",
@@ -1736,14 +1718,14 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
-		const video = getVideoAt(data.index);
+		const video = SERVER.PLAYLIST.at(data.index);
 
-		if (video.node.videoid !== data.sanityid) {
+		if (video.id() !== data.sanityid) {
 			return doorStuck(socket);
 		}
 
 		//switch before actually deleting the correct video
-		if (video.node === SERVER.ACTIVE) {
+		if (video === SERVER.ACTIVE) {
 			SERVER.ACTIVE = SERVER.ACTIVE.next;
 
 			handleNewVideoChange();
@@ -1754,7 +1736,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("addVideo", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot add a video");
 			return;
 		}
 
@@ -1765,9 +1747,7 @@ io.sockets.on('connection', function (ioSocket) {
 			...serviceLocator,
 		};
 
-		const handler = VideoHandlers.get(data.videotype);
-
-		if (!handler) {
+		if (!VideoHandlers.has(data.videotype)) {
 			DefaultLog.error(
 				events.EVENT_ADMIN_ADDED_VIDEO,
 				"no handler for {source}",
@@ -1778,11 +1758,12 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
-		await handler.handle(links, data).then((video) => {
+		VideoHandlers.get(data.videotype).handle(links, data).then((video) => {
 			DefaultLog.info(
 				events.EVENT_ADMIN_ADDED_VIDEO,
 				"{mod} added {provider} video {title}",
-				{mod: getSocketName(socket), provider: data.videotype, title: video.title()});
+				{mod: getSocketName(socket), provider: video.source(), title: video.title()}
+			);
 		}).catch((err) => {
 			DefaultLog.error(
 				events.EVENT_ADMIN_ADDED_VIDEO,
@@ -1792,7 +1773,6 @@ io.sockets.on('connection', function (ioSocket) {
 
 			socket.emit("dupeAdd");
 		});
-
 	});
 	socket.on("importPlaylist", function (data) {
 		// old implementation can be found in source control
@@ -1800,7 +1780,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("forceStateChange", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_VIDEO)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot manually set videostate");
 			return;
 		}
 
@@ -1809,7 +1789,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("videoSeek", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_VIDEO)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot manually seek video");
 			return;
 		}
 
@@ -1884,7 +1864,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("kickUser", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_KICK_USER)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot kick user");
 			return;
 		}
 
@@ -1892,7 +1872,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("shadowBan", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_SHADOWBAN)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot shadowban");
 			return;
 		}
 
@@ -1948,7 +1928,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("setAreas", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_SET_AREAS)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot set an area");
 			return;
 		}
 
@@ -1962,15 +1942,14 @@ io.sockets.on('connection', function (ioSocket) {
 		setAreas(areaname, content);
 	});
 	socket.on("fondleVideo", function (data) {
-		// New abstraction for messing with video details
-		const video = getVideoAt(data.info.pos).node;
+		const video = SERVER.PLAYLIST.at(data.info.pos);
 
 		if (data.sanityid && video.id() !== data.sanityid) { 
 			return doorStuck(socket); 
 		}
 
 		if (!authService.can(socket.session, actions.ACTION_SET_VIDEO_VOLATILE)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot fondle video");
 			return;
 		}
 
@@ -1996,7 +1975,7 @@ io.sockets.on('connection', function (ioSocket) {
 			if (data.action == "setUserNote") {
 				var d = data.info; // Drop action name.
 				if (!authService.can(socket.session, actions.ACTION_SET_USER_NOTE)) {
-					kickForIllegalActivity(socket);
+					kickForIllegalActivity(socket, "You cannot set usernote");
 					return;
 				}
 
@@ -2044,7 +2023,7 @@ io.sockets.on('connection', function (ioSocket) {
 
 	socket.on("getBanlist", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_BAN)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot get banlist");
 			return;
 		}
 
@@ -2052,7 +2031,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("ban", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_BAN)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot ban users");
 			return;
 		}
 
@@ -2060,7 +2039,7 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 	socket.on("forceRefreshAll", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_FORCE_REFRESH)) {
-			kickForIllegalActivity(socket);
+			kickForIllegalActivity(socket, "You cannot force refresh people");
 			return;
 		}
 
@@ -2107,5 +2086,41 @@ function withAliases(keys, value) {
 
 	return obj;
 }
+
+/*
+*/
+
+
+/*
+function assert_eq(a, b, message) {
+	if (typeof a === 'object') {
+		[a, b] = [JSON.stringify(a), JSON.stringify(b)];
+	}
+
+	if (a !== b) {
+		throw message || "No assert message"
+	}
+}
+function comparePlaylists() {
+	const old = SERVER.PLAYLIST.toArray();
+	const now = playlistService.playlist.videos();
+
+	assert_eq(old.length, now.length, "Lengths don't match");
+	assert_eq(SERVER.ACTIVE.videoid, playlistService.current().id(), `ACTIVE no match: ${SERVER.ACTIVE.videoid} !== ${playlistService.current().id()}`);
+
+	//log the attempt
+	for (let i = 0; i < old.length; i += 1) {
+		let a = old[i];
+		let b = now[i];
+
+		assert_eq(a.videoid, b.id(), `ID's don't match ${a.videoid} ${b.id()}`);
+		assert_eq(a.videolength, b.duration(), `Lengths don't match`);
+		assert_eq(a.videotitle, b.title(), `Titles don't match: ${a.videotitle} ${b.title()}`);
+		assert_eq(a.videotype, b.source(), 'Video sources do not match');
+		assert_eq(a.meta, b.metadata(), `Metadata no match: ${JSON.stringify(a.meta)} !== ${JSON.stringify(b.metadata())}`);
+		assert_eq(a.volat, b.volatile(), `Volatililty no match: ${a.volat} !== ${b.volatile()}`);
+	}
+}
+*/
 
 /* vim: set noexpandtab : */

@@ -58,9 +58,9 @@
 
 <?php start_minified_tags(); ?>
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.15.4/video-js.min.css" integrity="sha512-RU6FIpN8MZ6jrswHMYzP9t7QlAtDkpCJP6uqyHYm56iP6eEdYCDfMW2C42KtimtJ8DKa+iWJqjpeTyLyQjV61g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/themes/ui-lightness/jquery-ui.min.css" integrity="sha256-N7K28w/GcZ69NlFwqiKb1d5YXy37TSfgduj5gQ6x8m0=" crossorigin="anonymous" />
-<link rel="stylesheet" href="<?= cdn('vendor/videojs-quality-selector/quality-selector.css') ?>" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.20.0/video-js.min.css" integrity="sha512-D/n19dhr+LY8HOoGuybX+bJYsZOFKb0r7YpAWBMPg5Hnke6lxdHl6q21d7qiwIsMgdSnBG9pSMQlwTtZ+6ISmw==" crossorigin="anonymous" referrerpolicy="no-referrer" defer/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/themes/ui-lightness/jquery-ui.min.css" integrity="sha256-N7K28w/GcZ69NlFwqiKb1d5YXy37TSfgduj5gQ6x8m0=" crossorigin="anonymous" defer/>
+<link rel="stylesheet" href="<?= cdn('vendor/videojs-quality-selector/quality-selector.css') ?>" defer/>
 
 <link rel="stylesheet" href="<?= cdn('css/colors.css') ?>" id="mainTheme"/>
 <script>
@@ -81,10 +81,10 @@
 	}
 </script>
 
-<link rel="stylesheet" href="<?= cdn('css/layout-other.css') ?>" />
-<link rel="stylesheet" href="<?= cdn('css/uni-gui.css') ?>" />
-<link rel="stylesheet" href="<?= cdn('css/countdown.css') ?>" />
-<link rel="stylesheet" href="<?= cdn('berrymotes/css/berryemotecore.css') ?>" />
+<link rel="stylesheet" href="<?= cdn('css/layout-other.css') ?>" defer/>
+<link rel="stylesheet" href="<?= cdn('css/uni-gui.css') ?>" defer/>
+<link rel="stylesheet" href="<?= cdn('css/countdown.css') ?>" defer/>
+<link rel="stylesheet" href="<?= cdn('berrymotes/css/berryemotecore.css') ?>" defer/>
 
 <?php
 if (date('n') == 6 && $_COOKIE['no-pride'] !== 'true') {
@@ -92,13 +92,13 @@ if (date('n') == 6 && $_COOKIE['no-pride'] !== 'true') {
 }
 ?>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tinyscrollbar/2.4.2/jquery.tinyscrollbar.min.js" integrity="sha256-gENsdwXJl1qiwOqS0DF+kfqTP5Dy+0gDTtxpRcWVhrU=" crossorigin="anonymous" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/interact.js/1.10.11/interact.min.js" integrity="sha512-8hBiY/UwsVieg6BAQbtKG1HOFx8tJs1Iowlr8W1ju7ROpT9sY8JtbMY+xcDqDKGXKwkL7RA2Tkg4c5m3qNx7YA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/interact.js/1.10.11/interact.min.js" integrity="sha512-8hBiY/UwsVieg6BAQbtKG1HOFx8tJs1Iowlr8W1ju7ROpT9sY8JtbMY+xcDqDKGXKwkL7RA2Tkg4c5m3qNx7YA==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.19.2/video.min.js" integrity="sha512-QB9H6e1YDsAtrK5/+SeS0QUzhF4zPiRSxOuxNIZoyGJ+Fpzzz+TTgRn386TTetaAFnBU2Qf2lpEuWoUIgYLc+w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.20.0/video.min.js" integrity="sha512-K4iKTKq1qwm75WIsJkvci8Vccyw9SxOeb6za+RDLvCg/+oIYg/74PNSmoXLfF6ezSVbxeiiDsY66qfSvcrC85Q==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.16/socket.io.min.js" integrity="sha256-bFYtqOZj1MLDlOrOlxCU9aruDP2zxiIKvmoo+dHsy4w=" crossorigin="anonymous" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js" integrity="sha512-zYXldzJsDrNKV+odAwFYiDXV2Cy37cwizT+NkuiPGsa9X1dOz04eHvUWVuxaJ299GvcJT31ug2zO4itXBjFx4w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js" integrity="sha512-zYXldzJsDrNKV+odAwFYiDXV2Cy37cwizT+NkuiPGsa9X1dOz04eHvUWVuxaJ299GvcJT31ug2zO4itXBjFx4w==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
 <script src="<?= cdn('vendor/videojs-quality-selector/silvermine-videojs-quality-selector.js') ?>" defer></script>
 
 <script src="https://www.youtube.com/iframe_api" defer id="youtube-iframe-api"></script>
@@ -111,8 +111,8 @@ if (date('n') == 6 && $_COOKIE['no-pride'] !== 'true') {
 <script src="<?= cdn('js/init.js') ?>" defer></script>
 <script src="<?= cdn('js/functions.js') ?>" defer></script>
 <script src="<?= cdn('js/callbacks.js') ?>" defer></script>
-<script src="<?= cdn('js/modules/main.js') ?>" type="module"></script>
-<script src="<?= cdn('js/modules/player.js') ?>" type="module"></script>
+<script src="<?= cdn('js/modules/main.js') ?>" defer type="module"></script>
+<script src="<?= cdn('js/modules/player.js') ?>" defer type="module"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cookieconsent2/3.1.0/cookieconsent.min.js" integrity="sha256-y0EpKQP2vZljM73+b7xY4dvbYQkHRQXuPqRjc7sjvnA=" crossorigin="anonymous" defer></script>
 

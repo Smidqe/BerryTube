@@ -81,13 +81,8 @@ PEP.fixActive = function(t,now){
     now = Date.now();
   if(ACTIVE.videolength === 0){
     ACTIVE.endTime = undefined;
-//    $(this).addClass('loading');
-//    setTimeout(function(){
-//      $(this).removeClass('loading');
-//    },10000);
   } else{
     ACTIVE.endTime=(ACTIVE.videolength-t)*1000+now;
-    //$(this).removeClass('loading');
   }
   ACTIVE.startTime=(now-t*1000);
 };
@@ -116,10 +111,6 @@ PEP.initButts = function(){
       text:' ',//'🕐', And here I thought the very OS from which unicode 6.0 got its dingbats would support them. NOPE. Fucking windows.
       title:'Show/Hide Projected Play Times. Right Click for Options.',
       click: function(){
-        //if(PEP.loading)
-          //$(this).addClass('loading');
-        //else
-          //$(this).removeClass('loading')p;
         PEP.toggleTimes();
         PEP.pauseCalcs=!$('#plul').hasClass('showStarts');
         if(!PEP.pauseCalcs)
@@ -134,7 +125,6 @@ PEP.initButts = function(){
       click:PEP.alertDialog
     }).insertBefore("#plstats .totalLength");
 };
-//whenExists('#plstats .totalLength',PEP.initButts);
 
 PEP.toggleTimes = function(){
   $('#toggleTimes').toggleClass('timesOn');
@@ -517,29 +507,6 @@ PEP.restarPlaylist = function(){
   }
 };
 PEP.restarPlaylist();
-/*PEP.bench={};
-PEP.bench.begin = function(){
-  console.log("Stopping automatic recalcs to observe prediction accuracy");
-  PEP.backcalc = PEP.calcEstTimes;
-  PEP.calcEstTimes=function(){};
-  PEP.benchInt = setInterval(function(){
-    PEP.backcalc()
-  },1800000);
-  socket.on("forceVideoChange",PEP.bench.fvc);
-}
-PEP.bench.end = function(){
-  console.log("Resuming normal functionality");
-  clearInterval(PEP.benchInt);
-  socket.removeListener("forceVideoChange",PEP.bench.fvc);
-  PEP.calcEstTimes=PEP.backcalc;
-  PEP.calcEstTimes();
-}
-PEP.bench.fvc = function(data){
-  PEP.bench.now=Date.now()+3000;
-  setTimeout(function(){
-    console.log((PEP.bench.now-ACTIVE.startTime)/1000.0)}
-  ,1000);
-};*/
   var oplaylistsize=$("#playlist").height();
   $(document).bind("mouseup.checkplaylistresize",function (e){
     if($("#playlist").height()!==oplaylistsize){

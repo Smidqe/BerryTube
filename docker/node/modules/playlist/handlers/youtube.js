@@ -82,7 +82,7 @@ exports.YoutubeHandler = class extends Handler {
 			data,
 			new Video({
 				videoid: data.videoid,
-				videotitle: video?.snippet?.localized?.title || video?.snippet?.title,
+				videotitle: encodeURIComponent(video?.snippet?.localized?.title || video?.snippet?.title),
 				videolength: isoDuration.toSeconds(isoDuration.parse(video?.contentDetails?.duration)),
 				videotype: "yt",
 				meta: {},

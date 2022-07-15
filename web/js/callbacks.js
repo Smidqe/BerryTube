@@ -7,33 +7,26 @@ function videoEnded() {
 	}
 }
 function videoSeeked(time) {
-	// Playlist progression is controlled by the server now.
-	if (controlsVideo()) {
-		console.log('videoSeek');
-		socket.emit("videoSeek", time);
+	if (!controlsVideo()) {
+		return;
 	}
+	// Playlist progression is controlled by the server now.
+	
+	socket.emit("videoSeek", time);
 }
 function videoPlaying() {
-	if (controlsVideo()) {
-		videoGetTime(function (time) {
-			SEEK_TO = time;
-			if (SEEK_TO != SEEK_FROM) {
-				videoSeeked(time);
-			}
-			SEEK_FROM = 0;
-			forceStateChange();
-			dbg("PLAYING");
-		});
+	if (!controlsVideo()) {
+		return;
 	}
+
+	PLAYER.getTime(() => forceStateChange());
 }
 function videoPaused() {
-	if (controlsVideo()) {
-		videoGetTime(function (time) {
-			if (SEEK_FROM == 0) SEEK_FROM = time;
-			forceStateChange();
-			dbg("PAUSED");
-		});
+	if (!controlsVideo()) {
+		return;
 	}
+
+	PLAYER.getTime(() => forceStateChange());
 }
 
 socket.on("createPlayer", function (data) {
@@ -60,15 +53,15 @@ socket.on("recvNewPlaylist", function (data) {
 	newPlaylist($("#plul"));
 	socket.emit("renewPos");
 });
-socket.on("recvPlaylist", function (data) {
+socket.on("recvPlaylist", async function (data) {
 	PLAYLIST = new LinkedList.Circular();
 	for (const video of data) {
 		PLAYLIST.append(video);
 	}
-	whenExists("#leftpane", function (obj) {
-		initPlaylist(obj);
-		setVal("PLREADY", true);
-	});
+
+	initPlaylist($("#leftpane"));
+	setVal("PLREADY", true);
+	socket.emit("myPlaylistIsInited");
 });
 socket.on("hbVideoDetail", function (data) {
 	if (controlsVideo()) {
@@ -93,10 +86,13 @@ socket.on("hbVideoDetail", function (data) {
 		seek: [false, -1]
 	};
 
-	videoGetTime((time) => {
-		const videoState = videoGetState();
+	PLAYER.getTime((time) => {
+		const videoState = PLAYER.getVideoState();
 
-		flags.seek = Math.abs(time - data.time) > accuracy ? [true, data.time]: flags.seek; 
+		if (Math.abs(time - data.time) > accuracy) {
+			flags.seek = [true, data.time];
+		}
+
 		flags.play = data.state === 1 && videoState !== 1;
 
 		if (data.state !== videoState && !flags.play) {
@@ -105,11 +101,11 @@ socket.on("hbVideoDetail", function (data) {
 		}
 
 		if (flags.play) {
-			videoPlay();
+			PLAYER.play()
 		}
 
 		if (flags.seek[0] && time !== -1) {
-			videoSeekTo(flags.seek[1]);
+			PLAYER.seek(flags.seek[1]);
 		}
 	});
 });
@@ -122,6 +118,7 @@ socket.on("forceVideoChange", function (data) {
 	setPlaylistPosition(data);
 	videoLoadAtTime(ACTIVE, data.time);
 	if (MONITORED_VIDEO != null) {
+
 		ATTENTION.play();
 		MONITORED_VIDEO.domobj.removeClass('notify');
 		MONITORED_VIDEO = null;
@@ -137,16 +134,18 @@ socket.on("badAdd", function () {
 	dbg("Bad Add");
 	revertLoaders();
 });
-socket.on("setAreas", function (data) {
+socket.on("setAreas", async function (data) {
 	for (const area of data) {
 		whenExists(`#dyn_${area.name}`, (a) => {
 			a[0].innerHTML = area.html;
-			a[0].querySelectorAll('a:not([rel])').forEach(
-				n => n.setAttribute('rel', 'noopener noreferrer')
-			);
-			a[0].querySelectorAll('img:not([alt])').forEach(
-				n => n.setAttribute('alt', '')
-			);
+
+			for (const link of a[0].querySelectorAll('a:not([rel])')) {
+				link.setAttribute('rel', 'noopener noreferrer')
+			}
+
+			for (const alt of a[0].querySelectorAll('img:not([alt])')) {
+				alt.setAttribute('alt', '');
+			}
 		})
 	}
 });
@@ -154,7 +153,7 @@ socket.on("addVideo", function (data) {
 	unfuckPlaylist();
 	addVideo(data.video, data.queue, data.sanityid);
 });
-socket.on("addPlaylist", function (data) {
+socket.on("addPlaylist", async function (data) {
 	dbg(data);
 
 	for (const video of data.videos) {
@@ -164,10 +163,11 @@ socket.on("addPlaylist", function (data) {
 socket.on("delVideo", function (data) {
 	unfuckPlaylist();
 	dbg(data);
-	const item = document.querySelector(`#playlist li:nth-child(${data.position})`);
+	const item = document.querySelector(`#playlist li:nth-child(${data.position + 1})`);
 	const video = item.video;
 
 	if (video.videoid !== data.sanityid) {
+		console.warn('DOOR STUCK')
 		socket.emit("refreshMyPlaylist");
 		return;
 	}
@@ -178,7 +178,6 @@ socket.on("delVideo", function (data) {
 	recalcStats();
 });
 socket.on("setLeader", function (data) {
-	console.warn(data)
 	if (data && !LEADER) {
 		addChatMsg(
 			{
@@ -269,11 +268,6 @@ socket.on(
 			return;
 		}
 
-		const leaders = Array.from(document.querySelectorAll('.leader'))
-		for (const nick of data.nicks) {
-			
-		}
-		console.warn(data)
 		whenExists("#chatlist ul li", function (obj) {
 			$(obj).removeClass("leader");
 			$(obj).each(function (key, val) {
@@ -295,11 +289,12 @@ socket.on("setVidColorTag", function (data) {
 	setVidColorTag(data.pos, data.tag, data.volat);
 });
 socket.on("kicked", function (reason) {
-	
 	var msg = "You have been kicked";
+
 	if (reason) {
 		msg += `: ${reason}`;
 	}
+	
 	document.querySelector('.chatbuffer').append(
 		createElement('div', {class: 'kicked', text: msg})
 	);
@@ -315,16 +310,11 @@ socket.on("updatePoll", function (data) {
 	updatePoll(data);
 });
 socket.on("setToggleable", function (data) {
-	tn = data.name;
-	ts = data.state;
-	setToggleable(tn, ts);
+	setToggleable(data.name, data.ts);
 });
-socket.on("setToggleables", function (data) {
+socket.on("setToggleables", async function (data) {
 	for (var i in data) {
-		tn = i;
-		ts = data[i].state;
-		tl = data[i].label;
-		setToggleable(tn, ts, tl);
+		setToggleable(i, data[i].state, data[i].label);
 	}
 });
 socket.on("clearPoll", function (data) {
@@ -374,8 +364,8 @@ socket.on('reconnect', function () {
 	scrollBuffersToBottom();
 
 	var data = $('#headbar').data('loginData');
+
 	if (data != undefined) {
-		data.ghostBust = true;
 		socket.emit('setNick', data);
 	}
 });
@@ -541,12 +531,9 @@ socket.on('forceRefresh', function (data) {
 	let delay = 0;
 	if (data && data.delay) {
 		if (data.delay === true) {
-			if (data.delayMin === undefined) {
-				data.delayMin = 100;
-			}
-			if (data.delayMax === undefined) {
-				data.delayMax = 5000;
-			}
+			data.delayMin = data.delayMin ?? 100;
+			data.delayMax = data.delayMax ?? 5000;
+
 			delay = Math.random() * (data.delayMax - data.delayMin) + data.delayMin;
 		} else {
 			delay = data.delay;
@@ -561,7 +548,6 @@ socket.on('forceRefresh', function (data) {
 	}, delay);
 });
 socket.on('shitpost', function (data) {
-	console.log('shitpost', data);
 	const parts = data.msg.split(' ');
 	switch (parts[0].toLowerCase()) {
 		case 'roll':
@@ -591,7 +577,4 @@ socket.on('shitpost', function (data) {
 			}, 1000 * (5 + 2 + 3) + 100);
 			break;
 	}
-});
-socket.on('debugDump', function (data) {
-	DEBUG_DUMPS.push(data);
 });

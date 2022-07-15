@@ -83,12 +83,14 @@ export class Base {
 	}
 
 	event(event, data) {
-		console.warn(event, data);
 		switch (event) {
-			case Event.End: window.videoEnded(); break; 
-			case Event.Pause: window.videoPaused(); break;
+			case Event.End: window.videoEnded(); break;
+
+			case Event.Pause: 
+			case Event.Play:
+				window.forceStateChange(); break;
+				
 			case Event.Seek: window.videoSeeked(data.time); break;
-			case Event.Play: window.videoPlaying(); break;
 			case Event.Volume: window.volume.set(data.volume); break;
 			
 			//incase the player has error event mixed
@@ -97,9 +99,7 @@ export class Base {
 			//there are more events that are not handled atm, but could be in the future
 			//only bugger in debug mode
 			default: {
-				if (window.DEBUG) {
-					console.info(`Player ${window.VIDEO_TYPE} gave an unhandled event ${event}`);
-				}
+				window.dbg(`Player ${window.VIDEO_TYPE} gave an unhandled event ${event}`);
 			}
 		}
 	}

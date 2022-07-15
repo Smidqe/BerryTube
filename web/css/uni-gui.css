@@ -197,10 +197,6 @@ body.dragging * {
 	touch-action: none;
 }
 
-#chatpane.admin #chatinput > input {
-	padding-left: 60px;
-}
-
 #chatpane.admin #adminRainbow {
 	display: block;
 }
@@ -211,4 +207,16 @@ body.dragging * {
 
 .controlWindow > p {
 	margin: 10px 5px 10px 5px;
+}
+
+#sbstare {
+	height: 80px;
+}
+  
+#sbstare > span {
+	animation: marquee 10s linear infinite;
+}
+
+@keyframes marquee {
+	from { margin-left: 100%; } to { margin-left: -20%; }  
 }

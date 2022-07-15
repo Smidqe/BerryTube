@@ -288,8 +288,6 @@ body {
 	background:black;
 }
 #playlist ul li{
-	font-family: Arial;
-	background: none repeat scroll 0 0 #000000;
     border: 1px solid #732C7B;
     cursor: ns-resize;
 }
@@ -319,7 +317,6 @@ body {
     margin-left: 5px;
     padding: 0;
     text-align: center;
-	display:none;
 
 	min-width: 14px;
 	min-height: 14px;
@@ -338,7 +335,6 @@ body {
     margin-left: 5px;
     padding: 0;
     text-align: center;
-	display:none;
 
 	min-width: 14px;
 	min-height: 14px;
@@ -355,15 +351,8 @@ body {
     padding: 0;
     text-align: center;
     width: 14px;
-	display:none;
 }
-.admin #playlist ul .delete, .mod #playlist ul .delete, .assistant #playlist ul .delete,
-.admin #playlist ul .setVolatile, .mod #playlist ul .setVolatile, .assistant #playlist ul .setVolatile {
-	display:block;
-}
-.admin #playlist ul .requeue, .mod #playlist ul .requeue, .berry #playlist ul .requeue, .assistant #playlist ul .requeue{
-	display:block;
-}
+
 #playlist ul li.notify .title:after {
     content: ' \2605 ';
 }

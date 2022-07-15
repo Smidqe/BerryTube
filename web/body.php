@@ -58,14 +58,6 @@
 			<?php if (LAYOUT == 'hd') { ?>
 				|
 				<span><a style="color:white" id="kiosk" href="#">Kiosk Mode</a></span>
-				<script>
-					$("#kiosk").click(function(){
-						(function(){
-						var css = '#rightpane,#videobg{top:0!important;position:fixed!important}#chatbuffer,#rightpane,#videobg{top:0!important}#chatbuffer,#chatpane{height:100%!important;overflow:hidden!important}#chatbuffer,#chatpane,#rightpane,#videobg,#videowrap,#videowrap iframe{height:100%!important}#videobg{width:80%!important;background:#000!important}#rightpane{right:0!important;width:20%!important}#chatbuffer{width:100%!important}#chatpane{width:auto!important}#videowrap{width:100%!important}#connectedCountWrapper{width:100%!important;background:#fff!important}#videowrap iframe{width:100%!important}#rcvOverlay{border:0!important}#chatControls,#chatinput,#chatlist,#leftpane,.setNick{display:none!important}';
-						$("<style/>").html(css).appendTo(document.body);
-						})();
-					});
-				</script>
 			<?php } ?>
 			<?php
 				if (date('n') == 6) {

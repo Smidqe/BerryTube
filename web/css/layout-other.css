@@ -404,6 +404,7 @@ body {
     height: 30px;
     left: 0;
     position: absolute;
+	display: flex;
 }
 #chatinput input {
     height: 30px;
@@ -1037,6 +1038,15 @@ button.ranked-poll__submit-button {
 .super-select__option:hover {
     filter: none;
 }
+
+.flairMenuItems > .drinkflair {
+	filter: grayscale(100%);
+	cursor: pointer;
+}
+.flairMenuItems > .drinkflair:hover {
+    filter: none;
+}
+
 
 /* Discord emotes can be slightly narrower than expected */
 .berryemote[title$=" from /r/discordserver"] {

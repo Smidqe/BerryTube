@@ -42,14 +42,19 @@ exports.DatabaseService = class extends ServiceBase {
 	}
 
 	query(queryParts, ...params) {
+
+		
 		return new Promise((res, rej) => {
 			const sql = queryParts.join(" ? ");
+			this.log.info(events.EVENT_DB_QUERY, '{sql}. {params}', { sql, params });
 			this.connection.query(sql, params, (err, result, fields) => {
 				if (err) {
 					rej(err);
 					this.log.error(events.EVENT_DB_QUERY, 'query "{sql}" failed', { sql }, err);
 					return;
 				}
+
+				this.log.info(events.EVENT_DB_QUERY, '{result}', { result: JSON.stringify(result) });
 
 				res({ result, fields });
 			});

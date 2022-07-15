@@ -3,15 +3,23 @@
 	$.fn.timeOut = function(duration,callback) {
 		return this.each(function() {
 			var me = $(this);
-			me.css('position','relative');
-			me.css('cursor','pointer');
+
+			me.css({
+				'position': 'relative',
+				'cursor': 'pointer'
+			});
+
 			var resolution = 100;
 			var height = me.height();
 			var d = height / duration * resolution;
 			var timer = $('<div/>').appendTo(me);
-			timer.css('position','absolute');
-			timer.css('background',me.css('color'));
-			timer.css('bottom','0');
+
+			timer.css({
+				'position': 'absolute',
+				'background': me.css('color'),
+				'bottom': '0',
+			});
+
 			timer.addClass("timerTicker");
 			timer.height(height);
 			timer.width(me.width());
@@ -38,6 +46,12 @@
 		});
 	};
 })(jQuery);
+
+/*
+function visualTimeout(duration, endCallback) {
+
+}
+*/
 
 function confirmClick(node, cb) {
 	const hasText = node.firstChild.tagName === 'SPAN';
@@ -69,7 +83,22 @@ function confirmClick(node, cb) {
 
 	return fn;
 }
+function superSelect(data) {
+	const dropdown = createElement('div', {id: 'dd-jquery', class: 'super-select'},
+		...data.options.map(opt => createElement('div', {class: 'super-select__option'}, opt.cloneNode(true)))
+	);
 
+	dropdown.addEventListener('click', (e) => {
+		console.warn(e)
+		if (data.callback) {
+			data.callback(e.target)
+		}
+
+		dropdown.remove();
+	});
+
+	
+}
 (function ($) {
 	$.fn.superSelect = function (data) {
 		return this.each(function () {
@@ -227,7 +256,7 @@ function confirmClick(node, cb) {
 					},
 					move (event) {
 						let parent = event.target.parentNode;
-						let [x, y]  = parent.position;
+						let [x, y] = parent.position;
 
 						parent.position = [
 							x + event.dx,
@@ -274,25 +303,25 @@ function confirmClick(node, cb) {
 })(jQuery);
 
 jQuery.fn.center = function () {
-	
-
 	requestAnimationFrame(() => {
 		const win = $(window);
 		this.css("position","absolute");
 		this.css("top", Math.max(0, ((win.height() - this.outerHeight()) / 2) + win.scrollTop()) + "px");
 		this.css("left", Math.max(0, ((win.width() - this.outerWidth()) / 2) + win.scrollLeft()) + "px");
-	})
+	});
 
     return this;
 };
 
-function whenExists(objSelector,callback){
+function whenExists(objSelector,callback, time = 0){
 	var guy = document.querySelectorAll(objSelector);
 	if(!guy){
+		console.warn(`Doesn't exist, wait`);
 		setTimeout(function(){
-			whenExists(objSelector,callback);
+			whenExists(objSelector,callback, time + 100);
 		},100);
 	} else {
+		console.warn(`Waited for ${time}`);
 		callback($(guy));
 	}
 }
@@ -344,7 +373,9 @@ syntax, with minor differences. But vanilla javascript is superior :P
 function createElement(kind, attrs = {}, ...children) {
 	const element = document.createElement(kind);
 
-	for (const [key, value] of Object.entries(attrs)) {
+	for (const key in attrs) {
+		const value = attrs[key];
+
 		switch (key) {
 			case 'text': element.textContent = value; break;
 			case 'html': element.innerHTML = value; break;

@@ -24,11 +24,10 @@ exports.Handler = class {
 			data.volat || services.socket.session.type === 0 || video.duration() > settings.core.auto_volatile
 		);
 
-		const {result} = await services.db.query(
-			[`select meta from videos_history where videoid = ?`],
-			[video.id()]
-		);
-
+		const {result} = await services.db.query`
+			select meta from videos_history where videoid = ${video.id()}
+		`;
+		
 		if (result.length === 1) {
 			try {
 				video.setMetadata({
@@ -40,16 +39,29 @@ exports.Handler = class {
 			}
 		}
 
-		//wasteful, but remove the queued video from videos_history
-		await services.db.query(
-			[`delete from videos_history where videoid = ?`],
-			[video.id()]
-		);
+		await services.db.query`
+			DELETE FROM
+				videos_history
+			WHERE
+				videoid = ${video.id()}
+		`;
+
+		const params = [
+			services.playlist.length, 
+			video.id(), 
+			video.title(), 
+			video.duration(), 
+			video.source(), 
+			services.socket.session.nick, 
+			JSON.stringify(video.metadata())
+		];
+
 
 		await services.db.query(
 			[`insert into ${config.video_table} (position, videoid, videotitle, videolength, videotype, videovia, meta) VALUES (?,?,?,?,?,?,?);`],
-			...[services.playlist.length, video.id(), video.title(), video.duration(), video.source(), services.socket.session.nick, JSON.stringify(video.metadata())]
+			...params
 		);
+
 
 		//add to actual playlist
 		if (!data.queue || !services.playlist.length) {

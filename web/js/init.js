@@ -108,6 +108,60 @@ LinkedList.Circular.prototype.toArray = function () {
 	return out;
 };
 
+LinkedList.Circular.prototype.some = function(cb) {
+	return this.find(cb) !== null;
+}
+
+LinkedList.Circular.prototype.find = function(cb) {
+	let video = this.first;
+
+	for (let i = 0; i < this.length; i++) {
+		if (cb(video, i)) {
+			return video;
+		}
+
+		video = video.next;
+	}
+
+	return null;
+}
+LinkedList.Circular.prototype.multiple = function(indexes) {
+	let map = new Map(
+		indexes.map(i => [i, null])
+	);
+
+	let video = this.first;
+	let max = Math.max(...indexes);
+
+	for (let i = 0; i <= max; i++) {
+		if (map.has(i)) {
+			map.set(i, video);
+		}
+
+		video = video.next;
+	}
+
+	return indexes.map(i => map.get(i));
+}
+LinkedList.Circular.prototype.at = function(index) {
+	let video = this.first;
+
+	for (let i = 0; i < index; i++) {
+		video = video.next;
+	}
+
+	return video;
+}
+
+LinkedList.Circular.prototype.each = function(cb) {
+	let video = this.first;
+
+	for (let i = 0; i < this.length; i++) {
+		cb(video, i);
+		video = video.next;
+	}
+}
+
 var btEvents = (function () {
 
 	var self = {};
@@ -142,10 +196,7 @@ var btEvents = (function () {
 
 var PLAYER = false;
 var LEADER = false;
-var ADMIN = false;
-var MOD = false;
 var NAME = false;
-var TIME = new Date();
 var TYPE = -1;
 var CHATLIST = new Map();
 var TOGGLEABLES = {};
@@ -153,18 +204,14 @@ var IGNORELIST = [];
 var CONNECTED = 0;
 var PLAYLIST = new LinkedList.Circular();
 var ACTIVE = new Video();
-var SEEK_FROM = 0;
-var SEEK_TO = 0;
 var HISTORY = [];
 var FLAIR_OPTS = [];
 var HISTORY_POS = 0;
 var HISTORY_SIZE = 50;
-var LAST_EMIT_STATE = -1;
 var CHAT_NOTIFY = false;
 var VIDEO_TYPE = false;
 var MY_FLAIR_ID = 0;
 var DRINKS = 0;
-var LAST_SEND_TIME = false;
 var NOTIFY_TITLE = "Chat!";
 var MONITORED_VIDEO = null;
 var KEEP_BUFFER = true;
@@ -188,7 +235,6 @@ var ADMIN_NOTIFY = false;
 var LAST_QUEUE_ATTEMPT = null;
 var POLL_TITLE_FORMAT = '';
 var POLL_OPTIONS = [];
-var DEBUG_DUMPS = [];
 
 var HIGHLIGHT_LIST = (localStorage.getItem('highlightList') || '').split(';').filter(n => n.length > 0);
 
@@ -219,6 +265,11 @@ const gridColors = [
 	"#F691B2",
 	"#CD74E6",
 	"#A47AE2"
+];
+
+const settings = [
+	//key, kind, title, cb
+	['', '', '', () => {}]
 ];
 
 try {
@@ -265,6 +316,10 @@ function doDelete(entry) {
 		return;
 	}
 
+	console.warn(
+		entry
+	)
+
 	const data = { 
 		index: entry.index(), 
 		sanityid: entry[0].video.videoid 
@@ -277,7 +332,8 @@ function doDelete(entry) {
 function doRequeue(entry) {
 	if (getVal("sorting") == true) { return; }
 	setVal("sorting", true);
-	console.log("Called doRequeue()");
+	console.trace("Called doRequeue()");
+
 	if (controlsPlaylist()) {
 		var from = entry.index();
 		var to = ACTIVE.domobj.index();
@@ -312,25 +368,24 @@ function doVolatile(entry) {
 	socket.emit("fondleVideo", data);
 }
 function doColorTag(entry, tag, volat) {
-	if (canColorTag()) {
-		if (window.SHITPOST_SKITTLE) {
-			tag = window.SHITPOST_SKITTLE;
-			delete window.SHITPOST_SKITTLE;
-		}
-		var pos = $(entry).index();
-		var id = entry[0].video.videoid;
-		var data = {
-			action: "setColorTag",
-			info: {
-				pos: pos,
-				tag: tag,
-				volat: volat
-			},
-			sanityid: id
-		};
-		dbg(data);
-		socket.emit("fondleVideo", data);
+	if (!canColorTag()) {
+		return;
 	}
+
+	var pos = $(entry).index();
+	var id = entry[0].video.videoid;
+	var data = {
+		action: "setColorTag",
+		info: {
+			pos: pos,
+			tag: tag,
+			volat: volat
+		},
+		sanityid: id
+	};
+	dbg(data);
+	socket.emit("fondleVideo", data);
+
 }
 
 function sortUserList() {
@@ -372,6 +427,22 @@ function showLogMenu() {
 		nick: ['All modmins', 'Berry', 'Server'],
 		type: ['All types', 'site', 'user', 'playlist']
 	};
+
+	/*
+	const fieldset = createElement('fieldset', {id: 'logFilters'},
+		createElement('legend', {text: 'Search Filters'}),
+		createElement('select', {id: 'logNickFilter'},
+			...filters.nick.map((kind) => createEelement('option', {text: kind}))
+		),
+		createElement('select', {id: 'logTypeFilter'},
+			...filters.type.map((kind) => createElement('option', {text: kind}))
+		)
+	);
+
+	win[0].append(
+		fieldset
+	);
+	*/
 
 	win.append(
 		$('<fieldset>', {id: 'logFilters'}).append(
@@ -426,6 +497,9 @@ function showConfigMenu(on) {
 		})
 		return;
 	}
+	const settings = [
+		[]
+	];
 	*/
 	// Position this beast.
 	var settWin = $("body").dialogWindow({
@@ -443,15 +517,12 @@ function showConfigMenu(on) {
 	//----------------------------------------
 	var row = $('<div/>').appendTo(configOps);
 	$('<span/>').text("Sync video:").appendTo(row);
-	var syncOnOff = $('<input/>').attr('type', 'checkbox').appendTo(row);
-	if (getStorage('syncAtAll') == 1) { syncOnOff.prop('checked', true); }
+	var syncOnOff = $('<input/>').attr('type', 'checkbox').prop('checked', getStorageToggle('syncAtAll')).appendTo(row);
+	
 	syncOnOff.change(function () { //
-		if ($(this).is(":checked")) {
-			setStorage('syncAtAll', 1);
-		} else {
-			setStorage('syncAtAll', 0);
-		}
+		setStorage('syncAtAll', this.checked)
 	});
+
 	//----------------------------------------
 	var row = $('<div/>').appendTo(configOps);
 	$('<span/>').text("Sync within").appendTo(row);
@@ -466,11 +537,7 @@ function showConfigMenu(on) {
 	var notifyMute = $('<input/>').attr('type', 'checkbox').appendTo(row);
 	if (getStorage('notifyMute') == 0) { notifyMute.prop('checked', true); }
 	notifyMute.change(function () { //
-		if ($(this).is(":checked")) {
-			setStorage('notifyMute', 0);
-		} else {
-			setStorage('notifyMute', 1);
-		}
+		setStorage('notifyMute', this.checked | 0);
 	});
 	//----------------------------------------
 	$("<div />")
@@ -487,11 +554,7 @@ function showConfigMenu(on) {
 	var notifyDrink = $('<input/>').attr('type', 'checkbox').appendTo(row);
 	if (getStorage("drinkNotify") == 1) { notifyDrink.prop('checked', true); }
 	notifyDrink.change(function () { //
-		if ($(this).is(":checked")) {
-			setStorage("drinkNotify", 1);
-		} else {
-			setStorage("drinkNotify", 0);
-		}
+		setStorage('drinkNotify', this.checked | 0);
 	});
 	//----------------------------------------
 	var row = $('<div/>').appendTo(configOps);
@@ -499,11 +562,7 @@ function showConfigMenu(on) {
 	var useLegacyPlayer = $('<input/>').attr('type', 'checkbox').appendTo(row);
 	if (getStorage("legacyPlayer") == 1) { useLegacyPlayer.prop('checked', true); }
 	useLegacyPlayer.change(function () { //
-		if ($(this).is(":checked")) {
-			setStorage('legacyPlayer', 1);
-		} else {
-			setStorage('legacyPlayer', 0);
-		}
+		setStorage('legacyPlayer', this.checked | 0);
 	});
 	//----------------------------------------
 	var row = $('<div/>').appendTo(configOps);
@@ -511,13 +570,8 @@ function showConfigMenu(on) {
 	var showChatTimestamps = $('<input/>').attr('type', 'checkbox').appendTo(row);
 	if (getStorage("showTimestamps") == 1) { showChatTimestamps.prop('checked', true); }
 	showChatTimestamps.change(function () { //
-		if ($(this).is(":checked")) {
-			$('body').addClass('showTimestamps');
-			setStorage('showTimestamps', 1);
-		} else {
-			$('body').removeClass('showTimestamps');
-			setStorage('showTimestamps', 0);
-		}
+		document.body.classList.toggle('showTimestamps', !this.checked);
+		setStorage('showTimestamps', this.checked | 0);
 	});
 	//----------------------------------------
 	var row = $('<div/>').appendTo(configOps);
@@ -525,13 +579,8 @@ function showConfigMenu(on) {
 	var showChatFlair = $('<input/>').attr('type', 'checkbox').appendTo(row);
 	if (getStorage("showChatflair") == 1) { showChatFlair.prop('checked', true); }
 	showChatFlair.change(function () {
-		if ($(this).is(":checked")) {
-			$('body').removeClass('hideChatFlair');
-			setStorage('showChatflair', 1);
-		} else {
-			$('body').addClass('hideChatFlair');
-			setStorage('showChatflair', 0);
-		}
+		document.body.classList.toggle('hideChatFlair', !this.checked);
+		setStorage('showChatflair', this.checked | 0);
 	});
 	//----------------------------------------
 	var row = $('<div/>').appendTo(configOps);
@@ -539,11 +588,7 @@ function showConfigMenu(on) {
 	var plFolAcVid = $('<input/>').attr('type', 'checkbox').appendTo(row);
 	if (getStorage("plFolAcVid") == 1) { plFolAcVid.prop('checked', true); }
 	plFolAcVid.change(function () { //
-		if ($(this).is(":checked")) {
-			setStorage('plFolAcVid', 1);
-		} else {
-			setStorage('plFolAcVid', 0);
-		}
+		setStorage('plFolAcVid', this.checked | 0);
 	});
 	//----------------------------------------
 	var row = $('<div/>').appendTo(configOps);
@@ -617,16 +662,16 @@ function showConfigMenu(on) {
 		var showShadowChatter = $('<input/>').attr('type', 'checkbox').appendTo(row);
 		if (getStorage("sbchatter") == 1) { showShadowChatter.prop('checked', true); }
 		showShadowChatter.change(function () { //
-			if ($(this).is(":checked")) {
-				$('body').addClass('showSBChatter');
-				setStorage('sbchatter', 1);
-			} else {
-				$('body').removeClass('showSBChatter');
-				setStorage('sbchatter', 0);
-			}
+			setStorage('sbchatter', this.checked | 0);
+			document.body.classList.toggle('showSBChatter', !this.checked);
 		});
 
+		
+
 		if (TYPE >= 2) {
+			for (const [key, value] of Object.entries(TOGGLEABLES)) {
+
+			}
 
 			for (var i in TOGGLEABLES) {
 				(function (i) {
@@ -638,11 +683,7 @@ function showConfigMenu(on) {
 					}
 					flutterYays.click(function (event) {
 						event.stopPropagation();
-						if ($(this).is(":checked")) {
-							socket.emit("setToggleable", { name: i, state: true });
-						} else {
-							socket.emit("setToggleable", { name: i, state: false });
-						}
+						socket.emit('setToggleable', {name: i, state: this.checked});
 						return false;
 					});
 				})(i);
@@ -683,6 +724,13 @@ function showConfigMenu(on) {
 
 	settWin.window.center();
 }
+function isMe(name) {
+	return name === NAME;
+}
+function isIgnored(name) {
+	return IGNORELIST.includes(name);
+}
+
 function showUserActions(who) {
 
 	var who = $(who);
@@ -698,6 +746,24 @@ function showUserActions(who) {
 
 	var name = $('<h1/>').text(target).appendTo(cmds);
 	var optWrap = $("<ul/>").attr('id', 'userOps').appendTo(cmds);
+
+	/*
+	const options = [
+		{can: canMoveBerry, op: setBerry, text: ''},
+		{can: canMoveBerry, op: removeBerry, text: ''},
+		{can: canKickUser, op: removeBerry, text: ''},
+	]
+
+	for (const opt of options) {
+		if (opt.can()) {
+			const elem = createElement('li', {text: opt.text, class: 'btn'});
+			
+			optWrap[0].append(elem);
+
+			elem.addEventListener('click', opt.listener);
+		}
+	}
+	*/
 
 	/*if (canMoveBerry()) {
 		var option = $('<li/>').text("Move berry").addClass('btn').appendTo(optWrap);
@@ -798,6 +864,8 @@ function showEditNote(nick) {
 		uid: "editnote",
 		center: true
 	});
+
+
 
 	var mainOptWrap = $('<div/>').appendTo(parent).addClass('controlWindow');
 	$('<p>').appendTo(mainOptWrap).text("Editing note for " + nick + ":").css("width", "300px");
@@ -954,7 +1022,11 @@ function addVideoControls(entry, optionList) {
 		var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
 		$("<span/>").text("Skip Video").appendTo(optBtn);
 		optBtn.click(function () {
-			videoPlayNext();
+			if (!controlsPlaylist()) {
+				return;
+			}
+
+			socket.emit("playNext");
 		});
 	}
 
@@ -1007,9 +1079,10 @@ function addVideoControls(entry, optionList) {
 
 	// Color Tags
 	if (canColorTag()) {
-		$("<hr/>").appendTo($("<li/>").appendTo(optionList));
-
 		optionList[0].append(
+			createElement('li', {},
+				createElement('hr')
+			),
 			createElement('li', {},
 				createColorGrid(true),
 				createColorGrid(false)
@@ -1025,37 +1098,39 @@ function moveToRCV(overlay, node, time) {
 		node
 	);
 
-	const timeout = $('<div>', {class: 'rmTimer'});
+	const timeout = createElement('div', {class: 'rmTimer'});
 
-	node.show('blind');
-	node.children('.message').append(
+	//node.show('blind');
+	node.style.display = 'block';
+	node.querySelector('.message')?.append(
 		timeout
 	);
 
-	timeout.timeOut(RCV_HOLDTIME - time, () => {
-		node.hide('blind', () => node.remove());
+	$(timeout).timeOut(RCV_HOLDTIME - time, () => {
+		node.remove();
 	});
 }
 
 function initRCVOverlay(above) {
-	var overlay = $("<div/>").insertBefore(above).attr('id', 'rcvOverlay');
-
+	const overlay = createElement('div', {id: 'rcvOverlay'});
+	
+	above[0].insertAdjacentElement("beforebegin", overlay);
 	above[0].rcv = [];
 	above[0].onscroll = function() {
 		let keep = [];
 		let now = new Date().getTime();
 
-		this.rcv.forEach((msg) => {
-			if (msg.offsetTop < 0) {
+		for (const msg of this.rcv) {
+			if ($(msg).position().top < 0) {
 				const hold = now - msg.madeAt;
 
 				if (hold < RCV_HOLDTIME) {
-					moveToRCV(overlay, $(msg.cloneNode()), hold);
+					moveToRCV(overlay, msg.cloneNode(true), hold);
 				}
 			} else {
 				keep.push(msg);
 			}
-		});
+		}
 
 		this.rcv = keep;
 	}
@@ -1063,34 +1138,41 @@ function initRCVOverlay(above) {
 	return overlay;
 }
 
+async function attemptQueue(url, volatile) {
+	await parseVideoURLAsync(url).then(info => {
+		let existing = PLAYLIST.find(video => video.videoid === info.id);
 
+		if (existing) {
+			doRequeue(existing.domobj);
+		} else {
+			LAST_QUEUE_ATTEMPT = {
+				queue: true,
+				videotype: info.source,
+				videoid: info.id,
+				videotitle: info.title,
+				volat: volatile
+			};
+
+			socket.emit("addVideo", LAST_QUEUE_ATTEMPT);
+		}
+	}).finally(revertLoaders);
+}
+
+function createPlaylistControls() {
+	const wrap = createElement('div', {id: 'playlistAddControls'})
+}
 function initPlaylistControls(plwrap) {
-	// Add controls
-
 	/*
-	const btn = createElement('div', {class: 'slideBtn', text: 'Import Video'},
-		createElement('div', {class: 'import'})
-	);
-
 	const wrap = createElement('div', {id: 'playlistAddControls'},
-		btn
-	);
 
-	btn.onclick = () => {
-		wrap.style.display = wrap.style.display === 'block' ? 'none' : 'block';
-	};
-
-
+	)
 	*/
+	// Add controls
 	var plcontrolwrap = $('<div id="playlistAddControls"/>').insertBefore(plwrap);
 	var openVideoButton = $('<div/>').addClass('slideBtn').text("Import Video").appendTo(plcontrolwrap);
 	var videoImportWrap = $('<div/>').addClass('import').insertAfter(openVideoButton);
 	openVideoButton.click(function () {
-		if (videoImportWrap.is(":hidden")) {
-			videoImportWrap.show("blind");
-		} else {
-			videoImportWrap.hide("blind");
-		}
+		this.firstElementChild.classList.toggle('hidden');
 	});
 
 	$('<div/>').addClass("note").html('Video or <a target="_blank" href="manifest.php">manifest</a> URL:').appendTo(videoImportWrap);
@@ -1099,65 +1181,23 @@ function initPlaylistControls(plwrap) {
 	var videoImport = $('<input/>').appendTo(impwrap);
 
 	var vqBtn = $('<div/>').addClass("impele").addClass("btn").text("Q").appendTo(container);
-	vqBtn.click(function () {
-		if (controlsPlaylist()) {
-			var btn = $(this);
-			parseVideoURL($(videoImport).val(), function (id, type, videotitle) {
-				elem = PLAYLIST.first; var found = false;
-				for (var i = 0; i < PLAYLIST.length; i++) {
-					if (elem.videoid == id) {
-						found = true;
-						doRequeue(elem.domobj);
-						console.log("found");
-						break;
-					}
-					elem = elem.next;
-				}
-				if (!found) {
-					btn.data('revertTxt', "Q");
-					btn.text('').addClass("loading");
-					LAST_QUEUE_ATTEMPT = {
-						queue: true,
-						videotype: type,
-						videoid: id,
-						videotitle: videotitle,
-						volat: false
-					};
-					socket.emit("addVideo", LAST_QUEUE_ATTEMPT);
-				}
-			});
-		}
+	vqBtn.click(async function () {
+		let btn = $(this);
+
+		await attemptQueue($(videoImport).val(), false).then(() => {
+			btn.data('revertTxt', "Q");
+			btn.text('').addClass("loading");
+		})
 	});
 
 	var vvBtn = $('<div id="addVolatButton"/>').addClass("impele").addClass("btn").text("V").appendTo(container);
-	vvBtn.click(function () {
-		if (controlsPlaylist()) {
-			var btn = $(this);
-			parseVideoURL($(videoImport).val(), function (id, type, videotitle) {
-				elem = PLAYLIST.first; var found = false;
-				for (var i = 0; i < PLAYLIST.length; i++) {
-					if (elem.videoid == id) {
-						found = true;
-						doRequeue(elem.domobj);
-						console.log("found");
-						break;
-					}
-					elem = elem.next;
-				}
-				if (!found) {
-					btn.data('revertTxt', "V");
-					btn.text('').addClass("loading");
-					LAST_QUEUE_ATTEMPT = {
-						queue: true,
-						videotype: type,
-						videoid: id,
-						videotitle: videotitle,
-						volat: true
-					};
-					socket.emit("addVideo", LAST_QUEUE_ATTEMPT);
-				}
-			});
-		}
+	vvBtn.click(async function () {
+		let btn = $(this);
+
+		await attemptQueue($(videoImport).val(), true).then(() => {
+			btn.data('revertTxt', "Q");
+			btn.text('').addClass("loading");
+		})
 	});
 
 	videoImport.keyup(function (e) { if (e.keyCode == 13) { vvBtn.click(); } });
@@ -1181,7 +1221,6 @@ function initPlaylistControls(plwrap) {
 			if (confirm("Really Randomize list? This should be done SPARINGLY! Its a decent bit of overhead, and will LAG PEOPLE FOR A LITTLE WHILE.")) { socket.emit("randomizeList"); }
 		}
 	});
-	$('<div/>').addClass("clear").appendTo(container);
 
 	initMultiqueue();
 }
@@ -1261,7 +1300,7 @@ function initMultiqueue(){
 		for (let i = 0; i < list.length; i++) {
 			const link = list[i];
 			$multiInputQueueBtn.text(`Queuing... [${i + 1}/${list.length}]`);
-			await queueLink(link);
+			await attemptQueue(link, true);
 		}
 
 		$multiInputQueueBtn.text("Done");
@@ -1270,96 +1309,26 @@ function initMultiqueue(){
 			$multiInputQueueBtn.attr("disabled", false).text("Queue");
 		}, 1500);
 	}
-
-	let isWait = null;
-	async function queueLink(link) {
-		return new Promise((res, rej) => {
-			isWait = function () {
-				isWait = null;
-				res();
-			};
-			queue(link);
-		});
-	}
-
-	const bind = (_) => {
-		const oldReq = window.doRequeue;
-		window.doRequeue = (...args) => {
-			isWait && isWait();
-			oldReq(...args);
-		};
-		const oldRev = window.revertLoaders;
-		window.revertLoaders = (...args) => {
-			isWait && isWait();
-			oldRev(...args);
-		};
-
-		// returns unbind
-		return (_) => {
-			window.doRequeue = oldReq;
-			window.revertLoaders = oldRev;
-		}
-	};
-	window.__multiQueueUnbind = bind();
-
-	function queue(link) {
-		parseVideoURL(link, function (id, type, videotitle) {
-			elem = PLAYLIST.first;
-			var found = false;
-			for (var i = 0; i < PLAYLIST.length; i++) {
-				if (elem.videoid == id) {
-					found = true;
-					doRequeue(elem.domobj);
-					break;
-				}
-				elem = elem.next;
-			}
-			if (!found) {
-				LAST_QUEUE_ATTEMPT = {
-					queue: true,
-					videotype: type,
-					videoid: id,
-					videotitle: videotitle,
-					volat: true,
-				};
-				socket.emit("addVideo", LAST_QUEUE_ATTEMPT);
-			}
-		});
-	}
 }
 
 function doPlaylistJump(elem) {
-	if (controlsPlaylist()) {
-		var index = $(elem).index();
-		var id = elem[0].video.videoid;
-		socket.emit("forceVideoChange", { index: index, sanityid: id });
+	if (!controlsPlaylist()) {
+		return;
 	}
+
+	socket.emit("forceVideoChange", { 
+		index: $(elem).index(), 
+		sanityid: elem[0].video.videoid 
+	});
 }
-function createQueueButton(entry) {
-	let element = createElement('div', {text: 'Q', class: 'requeue'});
 
-	element.onclick = () => doRequeue($(entry));
-	element.onmousedown = (e) => {
-		e.stopPropagation();
-		e.preventDefault();
-	};
-
-	return element;
+function createQueueButton() {
+	return createElement('div', {text: 'Q', class: 'requeue'});
 }
-function createDeleteButton(entry) {
-	let element = createElement('div', {text: 'X', class: 'delete'});
-
-	element.onclick = confirmClick(element, () => doDelete($(entry)))
-	element.onmousedown = (e) => {
-		e.stopPropagation();
-		e.preventDefault();
-	};
-
-	return element;
+function createDeleteButton() {
+	return createElement('div', {text: 'X', class: 'delete'});
 }
-function createPlaylistContextMenu(dom) {
 
-}
 function createPlaylistItem(data) {
 	const item = createElement('li');
 	
@@ -1368,21 +1337,9 @@ function createPlaylistItem(data) {
 	}
 
 	item.append(
-		createElement('div', {class: 'title', text: decodeURIComponent(data.videotitle).replace(/&amp;/g, '&')}),
+		createElement('div', {class: 'title', text: decodeURI(data.videotitle).replace(/&amp;/g, '&')}),
 		createElement('div', {class: 'time', text: secToTime(data.videolength)}),
 	);
-
-	if (controlsPlaylist()) {
-		item.append(
-			createQueueButton(item)
-		);
-	}
-
-	if (canDeleteVideo()) {
-		item.append(
-			createDeleteButton(item)
-		);
-	}
 
 	if (data.volat) {
 		item.classList.add('volatile');
@@ -1396,42 +1353,38 @@ function createPlaylistItem(data) {
 function newPlaylist(plul) {
 	plul[0].replaceChildren();
 
-	const playlist = plul[0];
-	let elem = PLAYLIST.first;
-	let length = PLAYLIST.length;
+	const fragment = new DocumentFragment();
 
-	for (var i = 0; i < length; i++) {
-		let entry = createPlaylistItem(elem);
+	PLAYLIST.each(video => {
+		let entry = createPlaylistItem(video);
 
-		elem.domobj = $(entry);
+		video.domobj = $(entry);
 		
-		playlist.append(
+		fragment.append(
 			entry
 		);
+	})
 
-		elem = elem.next;
-	}
-
+	plul[0].append(
+		fragment
+	)
+	
 	recalcStats();
 }
 
 function initPlaylist(parent) {
-
 	$("#playlist").remove();
 	plwrap = $('<div id="playlist"/>').appendTo(parent);
-	setVal('sorting', false);
+	
 
 	var viewPort = $('<div/>').addClass('viewport').appendTo(plwrap);
 	var overview = $('<div/>').addClass('overview').appendTo(viewPort);
 
 	plul = $("<ul/>").appendTo(overview).attr('id', 'plul');
-	if (controlsPlaylist()) {
-		plul.addClass("controlsOn");
-	}
 
 	initPlaylistControls(plwrap);
 	dbg("asking for permission to make the player");
-	socket.emit("myPlaylistIsInited");
+	
 	$('<div/>').addClass("clear").appendTo(plwrap);
 
 	var searchArea = $('<div/>').appendTo(plwrap).attr('id', 'searchbox');
@@ -1495,6 +1448,41 @@ function initPlaylist(parent) {
 	//plwrap.tinyscrollbar();
 	
 	newPlaylist(plul);
+
+	//add delegated controls
+	plul[0].addEventListener('click', (e) => {
+		const target = e.target;
+		const video = target.closest('li');
+
+		if (target.classList.contains('requeue')) {
+			doRequeue(video)
+		}
+
+		if (target.classList.contains('delete')) {
+			const confirm = target.classList.contains('confirm');
+
+			if (confirm) {
+				doDelete($(video));
+			}
+
+			target.classList.toggle('confirm', !confirm)
+		}
+	});
+
+	Sortable.create(plul[0], {
+		disabled: true,
+		onEnd: function (event) {
+			if (event.oldIndex === event.newIndex) {
+				return;
+			}
+
+			socket.emit("sortPlaylist", {
+				from: event.oldIndex,
+				to: event.newIndex,
+				sanityid: event.item.video.videoid
+			});
+		}
+	});
 }
 
 function keydownEventHandler(event) {
@@ -1585,22 +1573,21 @@ function initChatControls(parent) {
 			...FLAIR_OPTS
 		)
 	);
-
+	
+	/*
 	flairMenuWrap.click(function () {
 		flairMenuWrap.superSelect({
 			options: FLAIR_OPTS,
 			callback: function (selected) {
-				dbg(selected);
-				var newId = selected.getAttribute('flair_id');
-				if (typeof newId == "undefined") {
-					newId = 0;
-				}
-				MY_FLAIR_ID = parseInt(newId);
+				MY_FLAIR_ID = parseInt(selected.getAttribute('flair_id') || 0);
+				
 				setStorage('myFlairID', MY_FLAIR_ID); // TODO - This used to expire after a day, wat do?
+				
 				flairMenuWrap.removeClass().addClass('flair_' + MY_FLAIR_ID);
 			}
 		});
 	});
+	*/
 
 	var flairArrow = $('<div/>').attr('id', 'flairArrow').appendTo(chatControls);
 	flairArrow.click(function () {
@@ -1612,9 +1599,7 @@ function initChatControls(parent) {
 		showConfigMenu(settingsMenu);
 	});
 }
-function createTooltip(content) {
 
-}
 function initChat(parent) {
 	const maintab = createElement('div', {id: 'maintab', class: 'tab active', text: '#Main'});
 	const admintab = createElement('div', {id: 'admintab', class: 'tab', text: '#OPS'});
@@ -1624,7 +1609,7 @@ function initChat(parent) {
 
 	const usercountWrap = createElement('div', {id: 'connectedCountWrapper', title: `Kick rocks<br />I'm loading.`}, 
 		'Connected users:',
-		createElement('div', {id: 'connectedCount'})
+		createElement('span', {id: 'connectedCount'})
 	);
 
 	usercountWrap.onclick = toggleChatMode;
@@ -1639,7 +1624,9 @@ function initChat(parent) {
 			admintab
 		),
 		createElement('div', {id: 'chatbuffer', class: 'chatbuffer'},
-			createElement('marquee', {}, '[](/sbstare)')
+			createElement('div', {id: 'sbstare'}, 
+				createElement('span', {}, '[](/sbstare)')
+			)
 		),
 		createElement('div', {id: 'adminbuffer', class: 'chatbuffer inactive'}),
 		usercountWrap,
@@ -1709,10 +1696,33 @@ function initChat(parent) {
 
 	// Because FUCK YOUR EYEBALLS
 	
-	$('<div id="adminRainbow"/>').html('<span style="color: #EE4144;">A</span><span style="color: #F37033;">D</span><span style="color: #FDF6AF;">M</span><span style="color: #62BC4D;">O</span><span style="color: #1E98D3;">P</span><span style="color: #672F89;">S</span>').appendTo(chatinput);
+	//TODO: Move out from here, most users never see this
+	//TODO: Move to handleACL?
+	input.prepend(
+		createAdminRainbow()
+	);
 
 	initPolls($(chatpane));
 	initChatControls($(chatpane));
+}
+function createAdminRainbow() {
+	const letters = [
+		['A', '#EE4144'],
+		['D', '#F37033'],
+		['M', '#FDF6AF'],
+		['O', '#62BC4D'],
+		['P', '#1E98D3'],
+		['S', '#672F89'],
+	].map(([char, color]) => {
+		const element = createElement('span');
+		element.style.color = color;
+		element.append(char);
+		return element;
+	});
+
+	return createElement('div', {id: 'adminRainbow'},
+		...letters
+	)
 }
 function initChatList(data) {
 	data.forEach(user => addUser(user, false));
@@ -1759,7 +1769,6 @@ function createLoginForm() {
 		]
 	];
 
-	
 	const table = createElement('table', {},
 		...rows.map(row => createElement('tr', {}, 
 			createElement('td', {}, createElement('label', row[0])),
@@ -1801,25 +1810,9 @@ function createRegistrationForm() {
 
 	return table;
 }
-function initLoginForm(headbar) {
-	/*
+async function initLoginForm(headbar) {
 	const table = createLoginForm();
-	const register = createRegistrationForm();
-
-	headbar[0].append(
-		createElement('div', {}, 
-			createElement('form', {method: 'post'}, table)
-		),
-		createElement('div', {class: 'hidden'}, 
-			createElement('form', {method: 'post'}, register)
-		),
-	);
-	
-	const 
-	table.querySelector('.submit').onclick = () => {
-		register.classList.remove('hidden');
-	}
-	const submitter = () => {
+	const submitter = function() {
 		$('#headbar .loginError').html('');
 		var nick = this["loginname"].value;
 		var pass = this["loginpass"].value;
@@ -1831,7 +1824,7 @@ function initLoginForm(headbar) {
 			data['pass2'] = pass2;
 		}
 
-		headbar.data('loginData', data);
+		$(headbar).data('loginData', data);
 
 		if (pass2) {
 			socket.emit('registerNick', data);
@@ -1841,98 +1834,50 @@ function initLoginForm(headbar) {
 		
 		return false;
 	}
-	*/
 
-	var loginWrap = $('<div/>').appendTo(headbar);
-	var regWrap = $('<div/>').hide().appendTo(headbar);
+	headbar.append(
+		createElement('div', {}, 
+			createElement('form', {method: 'post'}, table)
+		),
+		createElement('label', {text: "Remember Me"}, 
+			createElement('input', {type: 'checkbox', checked: "checked", class: "rememberMe"})
+		),
+		createElement('div', {class: 'loginError'})
+	);
 
-	var loginForm = $('<form/>').attr('method', 'post').appendTo(loginWrap);
-	var layoutTable = $('<table/>').appendTo(loginForm);
-	var row = $('<tr/>').appendTo(layoutTable);
-	$('<label/>').attr('for', 'loginname').text('Username').appendTo($('<td/>').appendTo(row));
-	var userBar = $('<input/>').attr('id', 'loginname').attr('name', 'loginname').attr('type', 'text').attr('autocomplete', 'username').appendTo($('<td/>').appendTo(row));
-	var showregbtn = $('<div/>').addClass("submit").text("Register").appendTo($('<td/>').appendTo(row));
+	table.onsubmit = submitter;
+	table.querySelector('.submit').addEventListener('click', function() {
+		const register = createRegistrationForm();
+		const head = this.closest('#headbar');
 
-	var row = $('<tr/>').appendTo(layoutTable);
-	$('<label/>').attr('for', 'loginpass').text('Password').appendTo($('<td/>').appendTo(row));
-	var loginBar = $('<input/>').attr('id', 'loginpass').attr('name', 'loginpass').attr('type', 'password').attr('autocomplete', 'current-password').appendTo($('<td/>').appendTo(row));
-	var loginbtn = $('<div/>').addClass("submit").text("Login").appendTo($('<td/>').appendTo(row));
-
-	showregbtn.click(function () {
-		loginWrap.hide("blind", function () {
-			regWrap.show("blind");
-		});
-	});
-	loginForm.submit(function () {
-		//Handle login. Return false to prevent postback
-		$('#headbar .loginError').html('');
-		var nick = this["loginname"].value;
-		var pass = this["loginpass"].value;
-		var data = { nick: nick, pass: pass };
-		headbar.data('loginData', data);
-		socket.emit('setNick', data);
-		return false;
-	});
-	loginbtn.click(function () { loginForm.submit(); });
-	userBar.keyup(function (e) { if (e.keyCode == 13) { loginForm.submit(); } });
-	loginBar.keyup(function (e) { if (e.keyCode == 13) { loginForm.submit(); } });
-
-	var regForm = $('<form/>').attr('method', 'post').appendTo(regWrap);
-	var layoutTable = $('<table/>').appendTo(regForm);
-	var row = $('<tr/>').appendTo(layoutTable);
-	$('<span/>').text('Desired Username').appendTo($('<td/>').appendTo(row));
-	var newUserBar = $('<input/>').attr('name', 'regname').attr('type', 'text').attr('autocomplete', 'username').appendTo($('<td/>').appendTo(row));
-	var showloginbtn = $('<div/>').addClass("submit").text("Login").appendTo($('<td/>').appendTo(row));
-
-	var row = $('<tr/>').appendTo(layoutTable);
-	$('<span/>').text('Password').appendTo($('<td/>').appendTo(row));
-	var passBar = $('<input/>').attr('name', 'regpass').attr('type', 'password').attr('autocomplete', 'new-password').appendTo($('<td/>').appendTo(row));
-	$('<div/>').text("").appendTo($('<td/>').appendTo(row));
-
-	var row = $('<tr/>').appendTo(layoutTable);
-	$('<span/>').text('Confirm Password').appendTo($('<td/>').appendTo(row));
-	var pass2Bar = $('<input/>').attr('name', 'regpass2').attr('type', 'password').attr('autocomplete', 'new-password').appendTo($('<td/>').appendTo(row));
-	var regbtn = $('<div/>').addClass("submit").text("Register").appendTo($('<td/>').appendTo(row));
-
-	showloginbtn.click(function () {
-		regWrap.hide("blind", function () {
-			loginWrap.show("blind");
-		});
+		register.onsubmit = submitter;
+		
+		head.firstElementChild.classList.add('hidden');
+		head.firstElementChild.after(
+			createElement('div', {}, 
+				createElement('form', {method: 'post'}, register)
+			),
+		)
 	});
 
-
-
-	regForm.submit(function () {
-		//Handle register. Return false to prevent postback
-		$('#headbar .loginError').html('');
-		var nick = this["regname"].value;
-		var pass = this["regpass"].value;
-		var pass2 = this["regpass2"].value;
-		var data = { nick: nick, pass: pass, pass2: pass2 };
-		headbar.data('loginData', data);
-		socket.emit('registerNick', data);
-		return false;
-	});
-
-	$('<label><input type="checkbox" checked="checked" class="rememberMe" />Remember Me</label>').appendTo(headbar);
-	$('<div/>').addClass('loginError').appendTo(headbar);
-
-	regbtn.click(function () { regForm.submit(); });
-	newUserBar.keyup(function (e) { if (e.keyCode == 13) { regForm.submit(); } });
-	passBar.keyup(function (e) { if (e.keyCode == 13) { regForm.submit(); } });
-	pass2Bar.keyup(function (e) { if (e.keyCode == 13) { regForm.submit(); } });
 	// Autologin.
 	if (typeof localStorage != 'undefined') {
-		var nick = localStorage.getItem('nick');
-		var pass = localStorage.getItem('pass');
+		const nick = localStorage.getItem('nick');
+		const pass = localStorage.getItem('pass');
+
 		if (nick && pass) {
-			var data = { nick: nick, pass: pass };
-			headbar.data('loginData', data);
+			const data = { nick: nick, pass: pass };
+			$(headbar).data('loginData', data);
 			socket.emit('setNick', data);
 		}
 	}
 }
-function initDrinkCounter(under) {
+function initDrinkCounter() {
+	const elements = [
+		document.querySelector('#videobg'),
+		document.querySelector('#videowrap')
+	]
+
 	const wrap = createElement('div', {id: 'drinkWrap', class: 'hidden'}, 
 		createElement('div', {id: 'v', class: 'hidden'}),
 		createElement('span', {}, 
@@ -1942,11 +1887,13 @@ function initDrinkCounter(under) {
 		)
 	);
 
-	under.append(
+	(elements[0] || elements[1]).append(
 		wrap
 	);
 }
 function addPollOpt(to, optionCount) {
+	const options = [];
+
 	for (let i = 0; i < optionCount; i++) {
 		const input = createElement('input', {type: 'checkbox', tabindex: -1, class: 'optionWrap__two-thirds-checkbox'});
 		const option = createElement('div', {class: 'optionWrap'}, 
@@ -1961,10 +1908,12 @@ function addPollOpt(to, optionCount) {
 			this.closest('.optionWrap__two-thirds').classList.toggle('is-checked', this.checked)
 		}
 
-		to[0].append(
-			option
-		)
+		options.push(option);
 	}
+
+	to[0].append(
+		...options
+	)
 }
 function initPolls(under) {
 	const chat = createElement('div', {id: 'pollpane'});
@@ -2016,13 +1965,35 @@ function initPolls(under) {
 		createElement('tr', {},
 			createElement('td', {},
 				createElement('label', {text: 'Poll Title'})
+			),
+			createElement('td', {class: 'optionWrap'}, 
+				createElement('input', {type: 'text'})
+			),
+			createElement('td', {},
+				createElement('input', {class: 'cb', type: 'checkbox', title: 'Obscure votes until poll closes.', checked: true})
+			),
+		),
+		createElement('tr', {},
+			createElement('td'),
+			createElement('td', {},
+				createElement('div', {class: 'btn', text: 'New Option'})
+			),
+			createElement('td', {},
+				createElement('div', {class: 'btn', text: '+5'})
+			),
+		),
+		createElement('tr', {class: 'c-poll-select'},
+			createElement('td', {}),
+			createElement('td', {},
+				createElement(
+					'select', {class: 'c-poll-select__select'},
+					...autoCloseTimes.map(([time, title]) => createElement('option', {selected: time === 0, text: title, value: time}))
+				)
 			)
 		)
-	
+
+
 	);
-	const options = [
-		{title: 'Title', kind: ''}
-	]
 	*/
 
 	var table = $('<table/>').appendTo(controls.lastChild);
@@ -2048,22 +2019,6 @@ function initPolls(under) {
 	var optionContainer = $('<div/>').addClass("optionContainer").appendTo(td);
 
 	// New Option Row
-	/*
-	const newOptionRow = createElement('tr', {},
-		createElement('td'),
-		createElement('td', {},
-			createElement('div', {id: 'pc-option-new', class: 'btn', text: 'New Option'})
-		),
-		createElement('td', {}
-			createElement('div', {id: 'pc-option-multi', class: 'btn', text: '+5'})
-		),
-	);
-
-	table[0].append(
-		newOptionRow
-	);
-	*/
-
 	var row = $('<tr/>').appendTo(table);
 	$('<td/>').appendTo(row);
 	var td = $('<td/>').appendTo(row);
@@ -2120,43 +2075,53 @@ function initPolls(under) {
 	});
 
 	createPollBtn.click(() => createPoll("normal"));
-
 	createRankedPollBtn.click(() => createPoll("ranked"));
-
 	createRunoffBtn.click(function () {
-		if (canCreatePoll()) {
-			var threshold = parseInt(runoffThreshold.val());
-			if (isNaN(threshold)) {
-				return;
-			}
-
-			var ops = [];
-			$('.poll.active tr').each(function (index, elem) {
-				var $elem = $(elem);
-				var count = parseInt($elem.find('.btn').text());
-				if (!isNaN(count) && count >= threshold) {
-					const label = POLL_OPTIONS[index];
-					const isTwoThirds = label.endsWith(' (⅔ required)');
-					const text = isTwoThirds ? label.substr(0, label.length - ' (⅔ required)'.length) : label;
-					ops.push({ text, isTwoThirds });
-				}
-			});
-
-			if (ops.length > 0) {
-				socket.emit('newPoll', {
-					title: newPollTitle.val(),
-					obscure: newPollObscure.is(":checked"),
-					ops: ops,
-					closePollInSeconds: parseInt(automaticClose.val()),
-				});
-				newPollTitle.val('');
-				runoffThreshold.val('');
-				canvas.find('.option').parent().remove();
-				addPollOpt(optionContainer, 2);
-				newPollObscure.prop('checked', true);
-				newPollBtn.click();
-			}
+		if (!canCreatePoll()) {
+			return;
 		}
+
+		var threshold = parseInt(runoffThreshold.val(), 10);
+
+		if (isNaN(threshold)) {
+			return;
+		}
+
+
+
+		var ops = [];
+		$('.poll.active tr').each(function (index, elem) {
+			var $elem = $(elem);
+			var count = parseInt($elem.find('.btn').text());
+			if (!isNaN(count) && count >= threshold) {
+				const label = POLL_OPTIONS[index];
+				const isTwoThirds = label.endsWith(' (⅔ required)');
+				const text = isTwoThirds ? label.substr(0, label.length - ' (⅔ required)'.length) : label;
+				ops.push({ text, isTwoThirds });
+			}
+		});
+
+		/*
+		const ops = [];
+
+		for
+		*/
+
+		if (ops.length > 0) {
+			socket.emit('newPoll', {
+				title: newPollTitle.val(),
+				obscure: newPollObscure.is(":checked"),
+				ops: ops,
+				closePollInSeconds: parseInt(automaticClose.val()),
+			});
+			newPollTitle.val('');
+			runoffThreshold.val('');
+			canvas.find('.option').parent().remove();
+			addPollOpt(optionContainer, 2);
+			newPollObscure.prop('checked', true);
+			newPollBtn.click();
+		}
+
 	});
 
 	function createPoll(pollType = "normal") {
@@ -2225,32 +2190,85 @@ function initMailbox() {
 		createElement('img', {src: `${CDN_ORIGIN}/images/envelope.png`, alt: 'mail'})
 	)
 
-	button.onclick = toggleMailDiv;
+	button.addEventListener('click', toggleMailDiv);
+
 	clear.onclick = function() {
 		this.parentNode.previousSibling.replaceChildren();
 		this.closest('#mailDiv').classList.remove('new');
 
 		toggleMailDiv();
 	}
-
-	const box = createElement('div', {id: 'mailDiv'},
-		createElement('div', {id: 'mailboxDiv', class: 'hidden'}, 
-			createElement('div', {id: 'mailMessageDiv'}),
-			createElement('div', {},
-				clear,
-			)
-		),
-		button
-	)
-
-	document.body.append(
-		box
-	);
 }
-$(function () {
+
+function loadDefaultSettings() {
+	const options = [
+		{key: 'syncAtAll', default: 1},
+		{key: 'syncAccuracy', default: 2},
+		{key: 'notifyMute', default: 0},
+		{key: 'storeAllSquees', default: 1},
+		{key: 'drinkNotify', default: 0},
+		{key: 'legacyPlayer', default: 0},
+		{key: 'showTimestamps', default: 0},
+		{key: 'showChatflair', default: 1},
+		{key: 'plFolAcVid', default: 1},
+		{key: 'keeppolls', default: 5},
+		{key: 'sbchatter', default: 0},
+		{key: 'nightMode', default: 1},
+	];
+
+	for (const opt of options) {
+		if (!getStorage(opt.key)) {
+			setStorage(opt.key, opt.default)
+		}
+	}
+
+	const body = document.body;
+
+	// Reactions
+	if (getStorage('showTimestamps') == 1) { body.classList.add('showTimestamps'); }
+	if (getStorage('sbchatter') == 1) { body.classList.add('showSBChatter'); }
+	if (getStorage('showChatflair') == 0) { body.classList.add('hideChatFlair'); }
+	if (getStorage('nightMode') == 1) { body.classList.add('night'); }
+
+}
+
+function loadAllPlugins() {
+	//Init plugin manager stuff
+	for (const node of scriptNodes) {
+		var selector = '';
+		if (node.js.length > 0) {
+			// Use the first js file as the selector, if there is one
+			selector = 'script[src="' + node.js[0] + '"]';
+		}
+		else if (node.css.length > 0) {
+			// If there are no js files, use the first css file
+			selector = 'link[href="' + node.css[0] + '"]';
+		}
+
+		if (selector == '') {
+			// If there were no js or css files, or if the selector returns a match, skip this
+			// entry - it's either a bad node or they user has it installed as a user script
+			console.warn('Bad node ' + node.title + ', ignoring.');
+			continue;
+		}
+
+		node.exists = !!document.querySelector(selector);
+		node.enabled = getStorageToggle(node.setting) && !node.exists;
+		node.loaded = false;
+
+		if (node.enabled) {
+			loadPlugin(node);
+		}
+	}
+}
+
+$(async function () {
 	dbg("page loaded, firing onload scripts");
-	$("body").keypress(function (event) {
-		if (event.keyCode == 27) { event.preventDefault(); } // Stop escape killing connection in firefox.
+
+	document.body.addEventListener('keyup', (e) => {
+		if (e.code === 'Escape') {
+			e.preventDefault();
+		}
 	});
 
 	setTimeout(function () {
@@ -2292,66 +2310,39 @@ $(function () {
 			}, function (popup) {
 				if (!cookiepopupShown && popup.options.enabled || popup.options.revokable) {
 					cookiepopupShown = true;
-					$('<link>', {
-						rel: 'stylesheet',
-						href: 'https://cdnjs.cloudflare.com/ajax/libs/cookieconsent2/3.1.0/cookieconsent.min.css',
-						integrity: 'sha256-ebN46PPB/s45oUcqLn2SCrgOtYgVJaFiLZ26qVSqI8M=',
-						crossorigin: 'anonymous'
-					}).appendTo(document.head);
-					$('#cookieconsent-image').attr('src', CDN_ORIGIN + '/images/cookies/' + Math.floor(Math.random() * 5) + '.png');
+					
+					document.head.append(
+						createElement('link', {
+							rel: 'stylesheet',
+							href: 'https://cdnjs.cloudflare.com/ajax/libs/cookieconsent2/3.1.0/cookieconsent.min.css',
+							integrity: 'sha256-ebN46PPB/s45oUcqLn2SCrgOtYgVJaFiLZ26qVSqI8M=',
+							crossorigin: 'anonymous'
+						})
+					)
+					
+					//.attr('src', CDN_ORIGIN + '/images/cookies/' + Math.floor(Math.random() * 5) + '.png')
+					querySelector('#cookieconsent-image').setAttribute(
+						'src',
+						`${CDN_ORIGIN}/images/cookies/${Math.floor(Math.random() * 5)}.png`
+					)
 				}
 			});
 		}
 	}, 1000);
 
-	whenExists('#headbar', function () {
-		initLoginForm($('#headbar'));
-	});
+	initLoginForm(document.querySelector('#headbar'));
 
 	//initPlaylist($("#leftpane"));
 	initChat(document.querySelector('#rightpane'));
 	
-	const elements = [
-		document.querySelector('#videobg'),
-		document.querySelector('#videowrap')
-	]
 
-	initDrinkCounter(elements[0] || elements[1]);
+	initDrinkCounter();
 
 	initAreas();
 	initRCVOverlay($("#chatbuffer"));
 	initMailbox();
 
-	const options = [
-		{key: 'syncAtAll', default: 1},
-		{key: 'syncAccuracy', default: 2},
-		{key: 'notifyMute', default: 0},
-		{key: 'storeAllSquees', default: 1},
-		{key: 'drinkNotify', default: 0},
-		{key: 'legacyPlayer', default: 0},
-		{key: 'showTimestamps', default: 0},
-		{key: 'showChatflair', default: 1},
-		{key: 'plFolAcVid', default: 1},
-		{key: 'keeppolls', default: 5},
-		{key: 'sbchatter', default: 0},
-		{key: 'nightMode', default: 1},
-	];
-
-	for (const opt of options) {
-		if (!getStorage(opt.key)) {
-			setStorage(opt.key, opt.default)
-		}
-	}
-
-	const body = document.body;
-
-	// Reactions
-	if (getStorage('showTimestamps') == 1) { body.classList.add('showTimestamps'); }
-	if (getStorage('sbchatter') == 1) { body.classList.add('showSBChatter'); }
-	if (getStorage('showChatflair') == 0) { body.classList.add('hideChatFlair'); }
-	if (getStorage('nightMode') == 1) { body.classList.add('night'); }
-
-
+	loadDefaultSettings();
 	MY_FLAIR_ID = getStorageInteger('myFlairID', 0);
 
 	if (MY_FLAIR_ID !== 0) {
@@ -2361,17 +2352,24 @@ $(function () {
 	document.addEventListener('visibilitychange', function () {
 		window.flags.set('focused', !document.hidden);
 
-		if (document.hidden) {
-			windowShown();
-			windowFocused();
-		} else {
-			windowHidden();
+		if (!document.hidden) {
+			scrollBuffersToBottom();
+
+			if (CHAT_NOTIFY) {
+				clearInterval(CHAT_NOTIFY);
+			}
+			
+			document.title = WINDOW_TITLE;
 		}
 	});
 
-	$(".chatbuffer")
-		.mouseenter(function () { KEEP_BUFFER = false; })
-		.mouseleave(function () { KEEP_BUFFER = true; scrollBuffersToBottom(); });
+	const chatbuffer = document.querySelector('.chatbuffer');
+
+	chatbuffer.addEventListener('mouseenter', () => KEEP_BUFFER = false);
+	chatbuffer.addEventListener('mouseleave', () => {
+		KEEP_BUFFER = true;
+		scrollBuffersToBottom();
+	});
 
 	// make emotes copyable as [](/emote)
 	function collectCopy(node) {
@@ -2403,44 +2401,5 @@ $(function () {
 
 	setVal("INIT_FINISHED", true);
 
-	new Promise((res) => {
-		//Init plugin manager stuff
-		for (const node of scriptNodes) {
-			var selector = '';
-			if (node.js.length > 0) {
-				// Use the first js file as the selector, if there is one
-				selector = 'script[src="' + node.js[0] + '"]';
-			}
-			else if (node.css.length > 0) {
-				// If there are no js files, use the first css file
-				selector = 'link[href="' + node.css[0] + '"]';
-			}
-
-			if (selector == '') {
-				// If there were no js or css files, or if the selector returns a match, skip this
-				// entry - it's either a bad node or they user has it installed as a user script
-				console.log('Bad node ' + node.title + ', ignoring.');
-				continue;
-			}
-
-			node.exists = !!document.querySelector(selector);
-			node.enabled = getStorageToggle(node.setting) && !node.exists;
-			node.loaded = false;
-
-			if (node.enabled) {
-				loadPlugin(node);
-			}
-		}
-
-		res();
-	})
-
+	loadAllPlugins();
 });
-
-function getClosest(elem, selector) {
-	for (; elem && elem !== document; elem = elem.parentNode) {
-		if (elem.matches(selector)) { return elem; }
-	}
-
-	return null;
-}

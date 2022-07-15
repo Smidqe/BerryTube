@@ -2,6 +2,63 @@ let lastPollCountdown = null;
 
 const integerRegex = /^\d+$/;
 
+const Videosources = [
+	/*
+	Each source follows following format
+		name,
+		format ('' -> 1st matchgroup, 'url' if )
+		whole (false -> use 1st matchgroup, true -> url),
+		regex,
+		title (optional) 
+	];
+
+	Literal immutable regexes can be more performant than RegExp ones if not changing
+	https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions
+	*/
+
+	//youtube
+	['yt', false, /youtube\.com\/watch.*?[&?]v=([a-zA-Z0-9_-]{11})/g],
+	['yt', false, /youtu\.be\/([a-zA-Z0-9_-]{11})/],
+	['yt', false, /i\.ytimg\.com\/an_webp\/([a-zA-Z0-9_-]{11})\//g],
+	
+	//dailymotion
+	['dm', false, /dailymotion.com\/(?:embed\/)?video\/([a-zA-Z0-9]+)/g],
+	['dm', false, /dai.ly\/([a-zA-Z0-9]+)/g],
+	
+	//twitch
+	['twitchclip', false, /clips\.twitch\.tv\/([A-Za-z0-9-]+)/],
+	['twitchclip', false, /twitch\.tv\/[A-Za-z0-9]+\/clip\/([A-Za-z0-9-]+)/g],
+	['twitch', false, /twitch\.tv\/((?:videos\/)?[A-Za-z0-9-]+)/g],
+
+	//vimeo
+	['vimeo', false, /vimeo.com\/([^&]+)/g],
+	
+	//soundbutt
+	['soundcloud', false, /(https?:\/\/soundcloud.com\/[^/]+\/[^/?]+)/g],
+
+	//reddit (is hls, but needs id)
+	['reddit', false, /v\.redd\.it\/([\w]+)\//g],
+
+	//osmf aka rtmp
+	['osmf', true, /^rtmp:\/\//g, '~ Raw Livestream ~'],
+	['osmf', true, /\.f4m$/g, '~ Raw Livestream ~'],
+	
+	//dash
+	['dash', false, /https:\/\/watch.cloudflarestream.com\/([a-z0-9]+)/g, '~ Raw Livestream ~'],
+	['dash', true, /\.mpd/g],
+
+	//hls
+	['hls', true, /\.m3u8$/g, '~ Raw Livestream ~'],
+
+	//manifest
+	['manifest', true, /\.json[^/]*$/g],
+	
+	//file
+	['file', true, /\.(?:mp4|m4v|webm)?[^\\/]*$/g],
+];
+
+
+
 class Countdown {
 	constructor(totalTimeInSeconds, startedAt, handlers) {
 		this.isEnabled = true;
@@ -101,6 +158,28 @@ function showAdminFilterWindow() {
 			$(this).parents('.row').children('table').toggleClass('hidden');
 		});
 		var newTable = $('<table/>').addClass("hidden").appendTo(newRule);
+
+		/*
+		/[]/[]
+		div:ruleZone
+			div:rule
+				name
+					label, input
+				nick
+				text
+				replace
+				div:btns
+					enable
+					disable
+					remove (double sure)
+		createElement('div', {class: 'rule'},
+			createPair('', ''),
+			createPair('', ''),
+			createRegexPair()
+			createRegexPair(),
+
+		)
+		*/
 
 		/* Rule Name */
 		var nameRow = $('<tr/>').appendTo(newTable);
@@ -277,10 +356,11 @@ function showAdminFilterWindow() {
 			}
 
 			// Name Check
-			var nickCheck = new RegExp(d.nickMatch, d.nickParam);
-			var chatCheck = new RegExp(d.chatMatch, d.chatParam);
-			if (nick.match(nickCheck)) { //console.log("matched name");
-				if (msg.match(chatCheck)) { //console.log("matched chat");
+			const nickCheck = new RegExp(d.nickMatch, d.nickParam);
+			const chatCheck = new RegExp(d.chatMatch, d.chatParam);
+			
+			if (nickCheck.test(nick)) { //console.log("matched name");
+				if (chatCheck.test(msg)) { //console.log("matched chat");
 					// Perform Action
 					actionChain.push({ action: d.actionSelector, meta: d.actionMetadata });
 				}
@@ -289,7 +369,31 @@ function showAdminFilterWindow() {
 				}
 			}
 		}
+		
 		var a = '';
+
+		/*
+		const a = actionChain.reduce((acc, action) => {
+			switch (action.action) {
+				case "none": return acc;
+				case "hush": {
+					msg = msg.toLowerCase();
+				}
+			}
+
+			acc += `<div>ACTION: ${action.action}, ${action.meta}</div>`;
+		}, '')
+		for (const action of actionChain) {
+			switch (action.action) {
+				case "none": continue;
+				case "hush": {
+					msg = msg.toLowerCase();
+				}
+			}
+
+			a += `<div>ACTION: ${action.action}, ${action.meta}</div>`;
+		}
+		*/
 		for (var i = 0; i < actionChain.length; i++) {
 			if (actionChain[i].action == "none") {
 				continue;
@@ -443,34 +547,36 @@ function showBanDialog(nick) {
 		{length: 720, text: '12 hours'},
 	];
 	
-	const main = $('<div>', {class: 'controlWindow'}).append(
+	const main = createElement('div', {class: 'controlWindow'}, 
 		//TODO: Move the margin into a css file instead of inlining
-		$('<p>', {text: `Applying ban to ${nick}:`}),
-		$('<select>').append(
-			//add options
-			...options.map(option => $('<option>', {text: option.text}).data('time', option.length)),
-			//add permaban if applicable
-			TYPE >= 2 ? $('<option>', {text: 'Permanent'}).data('time', -1) : undefined,
+		createElement('p', {text: `Applying ban to ${nick}:`}),
+		createElement('select', {},
+			...options.map(option => createElement('option', {text: option.text, time: option.length})),
 		),
 		//add buttons
-		$('<div>').append(
-			$('<div>', {class: 'button', text: 'Cancel'}),
-			$('<div>', {class: 'button', text: 'Apply'}).data('apply', true),
+		createElement('div', {}, 
+			createElement('div', {class: 'button', text: 'Cancel'}),
+			createElement('div', {class: 'button accept', text: 'Apply'}),
 		)
 	).appendTo(parent);
 
-	//add event listeners
-	main.on('click', 'div.button', (ev) => {
-		if ($(ev.currentTarget).data('apply')) {
+	if (TYPE >= 2) {
+		main.querySelector('select').append(
+			createElement('option>', {text: 'Permanent', time: -1})
+		)
+	}
+
+	for (const btn of main.querySelectorAll('.button')) {
+		if (btn.classList.contains('accept')) {
 			socket.emit('ban', { 
 				nicks: [nick], 
-				ips: [$('li.' + nick).attr('ip')], 
-				duration: main.find(':selected').data('time') 
+				ips: [querySelector(`li[nick="${nick}"]`).getAttribute('ip')], 
+				duration: main.querySelector(':selected').getAttribute('time') 
 			});
 		}
 
 		parent.window.close();
-	});
+	}
 
 	parent.window.center();
 }
@@ -548,25 +654,13 @@ function showCustomSqueesWindow() {
 		}
 		else {
 			HIGHLIGHT_LIST = newList;
-
-			var nameList = '';
-			var first = true;
-			for (var i = 0; i < HIGHLIGHT_LIST.length; i++) {
-				if (first) {
-					first = false;
-				}
-				else {
-					nameList += ';';
-				}
-				nameList += HIGHLIGHT_LIST[i];
-			}
-			localStorage.setItem('highlightList', nameList);
+			localStorage.setItem('highlightList', HIGHLIGHT_LIST.join(';'));
 		}
 		highlight(saveBtn[0]);
 	});
 
-	for (var i in HIGHLIGHT_LIST) {
-		addName(HIGHLIGHT_LIST[i]);
+	for (const name of HIGHLIGHT_LIST) {
+		addName(name);
 	}
 
 	parent.window.center();
@@ -596,23 +690,24 @@ function showPluginWindow() {
 
 		if (!node.exists) {
 			var checkbox = $('<input type="checkbox"/>').data('node', node);
+			
+			
+
 			if (node.enabled) {
 				checkbox.prop('checked', true);
 			}
+
 			checkbox.change(function () {
-				var chk = $(this);
-				var chkNode = chk.data('node');
+				var chkNode = $(this).data('node');
 				if (chkNode) {
-					if (chk.is(':checked')) {
-						chkNode.enabled = true;
-						setStorage(chkNode.setting, true);
+					chkNode.enabled = this.checked;
+					setStorage(chkNode.setting, this.checked);
+
+					warnText.text(
+						this.checked ? '' : 'The plugin(s) you have disabled will be unloaded the next time you refresh.'
+					)
+					if (this.checked) {
 						loadPlugin(chkNode);
-						warnText.text('');
-					}
-					else {
-						chkNode.enabled = false;
-						setStorage(chkNode.setting, false);
-						warnText.text('The plugin(s) you have disabled will be unloaded the next time you refresh.');
 					}
 				}
 				else {
@@ -670,6 +765,62 @@ function showVideoRestrictionDialog(data) {
 		{key: 'geoblock', is: data.geoblock, canForce: true},
 	];
 
+	/*
+	const dom = createElement('div', {class: 'controlWindow'});
+	const conditions = new Map([
+		['restricted', {force: false, message: 'The video you attempted to queue was either removed or marked as private.'}]
+		['unembeddable', {force: false, message: 'The video you attempted to queue cannot be embedded.'}],
+		['ageblock', {force: false, message: 'Video cannot be queued due it being age restricted.'}]
+		['geoblock', {force: true}]
+	]);
+
+	const [force, messages] = data.reasons.reduce((reason, acc) => {
+		const condition = conditions.get(reason);
+
+		acc[0] &&= condition.force;
+
+		if (reason === 'geoblock') {
+			let countryText;
+			const countries = data.geoblock.countryNames || data.geoblock.countries;
+
+			if (Array.isArray(countries)) {
+				countryText = countries.join(', ');
+				if (data.totalCountries > countries.length) {
+					const diff = data.totalCountries - countries.length;
+					countryText += ` (and ${diff} other${diff === 1 ? '' : 's'})`;
+				}
+			} else {
+				countryText = countries;
+			}
+			
+			if (data.geoblock.kind === 'whitelist') {
+				acc[1].push(`The video you attempted to queue is only visible in these countries: ${countryText}`);
+			} else {
+				acc[1].push(`The video you attempted to queue is restricted in the following countries: ${countryText}`);
+			}
+		} else {
+			acc[1].push(condition.message);
+		}
+
+		return acc;
+	}, [true, []]);
+	
+	messages.unshift(
+		'Video has following restrictions:'
+	);
+
+	if (force) {
+		messages.push('Would you like to queue the video anyway?')
+	}
+
+	dom.append(
+		...messages.map(msg => createElement('p', {text: msg})),
+		force ?
+		
+	);
+
+	*/
+
 	//get the matched conditions
 	const matched = conditions.filter(n => n.is);
 	const canBeForced = matched.every(n => n.canForce);
@@ -683,6 +834,7 @@ function showVideoRestrictionDialog(data) {
 			)
 		)
 	).appendTo(parent);
+
 
 	const messages = matched.map((condition) => {
 		switch (condition.key) {
@@ -815,21 +967,6 @@ function showPasswordChangeDialog() {
 
 	parent.window.center();
 }
-function windowFocused() {
-	if (CHAT_NOTIFY) {
-		clearInterval(CHAT_NOTIFY);
-		document.title = WINDOW_TITLE;
-	}
-}
-function windowBlurred() {
-
-}
-function windowShown() {
-	scrollBuffersToBottom();
-}
-function windowHidden() {
-
-}
 function addZero(i) {
 	if (i < 10) {
 		i = "0" + i.toString();
@@ -879,12 +1016,11 @@ function recalcStats() {
 	var timeMan = $("#plstats .totalLength");
 
 	var x = 0;
-	elem = PLAYLIST.first;
-	dbg(PLAYLIST.first.videolength);
-	for (var i = 0; i < PLAYLIST.length; i++) {
-		x += (elem.videolength);
-		elem = elem.next;
-	}
+
+	PLAYLIST.each(video => {
+		x += video.videolength;
+	});
+
 	timeMan.text(secToTime(x));
 
 	numberMan.text(PLAYLIST.length + " Videos");
@@ -909,16 +1045,13 @@ function getToggleable(name) {
 	return TOGGLEABLES[name]?.state ?? false;
 }
 function forceStateChange() {
-	var s = videoGetState();
-	if (controlsVideo()) {
-		if (LAST_EMIT_STATE != s) {
-			socket.emit("forceStateChange", {
-				state: s
-			});
-
-			LAST_EMIT_STATE = s;
-		}
+	if (!controlsVideo() || ACTIVE.videolength === 0) {
+		return;
 	}
+
+	socket.emit("forceStateChange", {
+		state: PLAYER.getVideoState()
+	});
 }
 function handleACL() {
 
@@ -932,7 +1065,7 @@ function handleACL() {
 
 		if (isRegisteredUser()) {
 			const me = document.querySelector('#headbar .rememberMe');
-			const headbar = me.closest('#headbar');
+			const headbar = me?.closest('#headbar');
 			// If it doesn't exist we're a cached login.
 			// If it exists but is unchecked clear our local storage
 			// If it exists and is checked, cache login credentials.
@@ -973,51 +1106,21 @@ function handleACL() {
 
 		whenExists("#playlistAddControls", (controls) => {
 			const canQueue = controlsPlaylist();
-			const canDelete = canDeleteVideo();
-
-			controls[0].style.display = canQueue ? 'block' : 'none';
-
 			const playlist = controls[0].parentNode.querySelector('ul');
 
-			playlist.classList.toggle('controlsOn', canQueue);
 
-			if (canQueue && !playlist.classList.contains('previouslyEnabled')) {
-				playlist.classList.add("previouslyEnabled");
-				Sortable.create(playlist, {
-					onStart: function (event) {
-						console.warn(event)
-					},
-					onEnd: function (event) {
-						var data = {
-							from: event.oldIndex,
-							to: event.newIndex,
-							sanityid: event.item.video.videoid
-						};
-						dbg(data);
-						socket.emit("sortPlaylist", data);
-					}
-				});
+			controls[0].style.display = canQueue ? 'block' : 'none';
+			Sortable.get(playlist).option('disabled', !canQueue);
 
+			if (canQueue) {
 				for (const node of playlist.childNodes) {
-					if (!node.firstChild?.classList.contains('.requeue')) {
-						node.append(createQueueButton(node));
-					}
-
-					if (canDelete && !node.lastChild?.classList.contains('.delete')) {
-						node.append(createDeleteButton(node));
-					}
+					addVideoEntryControls(node);
 				}
-			}
-
-			if (playlist.classList.contains('previouslyEnabled')) {
-				Sortable.get(playlist).disabled = canQueue;
-			}
-
-			if (!canQueue) {
+			} else {
 				playlist.querySelectorAll('.requeue, .delete').forEach(node => node.remove());
 			}
 
-			if (ACTIVE && ACTIVE.domobj) {
+			if (ACTIVE?.domobj) {
 				scrollToPlEntry(ACTIVE.domobj.index());
 			}
 		});
@@ -1050,39 +1153,39 @@ function loginError(data) {
 	$('#headbar .loginError').text(data.message);
 }
 function isRegisteredUser() {
-	if (TYPE >= 0) {
-		return true;
-	}
-	return false;
+	return TYPE >= 0;
 }
 function sendChatMsg(msg, elem) {
 	//prevent sending messages without a nick
-	if (!canChat())
+	if (!canChat() || msg.trim().length === 0) {
 		return;
-
-	if (msg.trim().length > 0) {
-		HISTORY_POS = 0;
-		HISTORY.reverse();
-		HISTORY.push(msg);
-		HISTORY.reverse();
-		HISTORY[HISTORY_POS] = "";
-		if (HISTORY.length > HISTORY_SIZE) {
-			HISTORY.splice(HISTORY_SIZE, 1);
-		}
-
-		meta = {};
-		if (NAMEFLAUNT) { meta.nameflaunt = NAMEFLAUNT; }
-		meta.flair = MY_FLAIR_ID;
-		meta.channel = ACTIVE_CHAT;
-
-		handleSpamChecks(function () {
-			socket.emit("chat", {
-				msg: msg,
-				metadata: meta
-			});
-			elem.val("");
-		});
 	}
+
+	HISTORY.unshift(msg);
+	HISTORY_POS = 0;
+	HISTORY[HISTORY_POS] = "";
+
+	if (HISTORY.length > HISTORY_SIZE) {
+		HISTORY.splice(HISTORY_SIZE, 1);
+	}
+
+	const meta = {
+		flair: MY_FLAIR_ID,
+		channel: ACTIVE_CHAT
+	};
+
+	if (NAMEFLAUNT) { 
+		meta.nameflaunt = NAMEFLAUNT; 
+	}
+
+	handleSpamChecks(function () {
+		socket.emit("chat", {
+			msg: msg,
+			metadata: meta
+		});
+
+		elem[0].value = "";
+	});
 }
 
 function handleSpamChecks(callback) {
@@ -1219,6 +1322,9 @@ function addChatMsg(data, _to) {
 		var metadata = data.msg.metadata;
 		var isGhost = data.ghost;
 
+		const info = data.msg;
+
+
 		const wrap = createElement('div', {class: 'msgwrap'});
 		const message = createElement('div');
 
@@ -1227,10 +1333,10 @@ function addChatMsg(data, _to) {
 		);
 
 		if (typeof (nick !== "undefined")) {
-			wrap.setAttribute('nick', nick);
+			wrap.setAttribute('nick', info.nick);
 		}
 
-		if (IGNORELIST.includes(nick) && !metadata.nameflaunt) {
+		if (IGNORELIST.includes(info.nick) && !metadata.nameflaunt) {
 			return;
 		}
 
@@ -1239,15 +1345,17 @@ function addChatMsg(data, _to) {
 		}
 
 		//TODO: Replace this with information in CHATLIST (faster and easier)
-		const user = CHATLIST.get(nick);
-		const isSquee = metadata.isSquee || (nick != NAME && NAME.length > 0 && detectName(NAME, msgText));
+		const user = CHATLIST.get(info.nick);
+		const isSquee = metadata.isSquee || (NAME?.length > 0 && detectName(NAME, msgText));
 		
 		let includeTimestamp = false;
 
 		if (user) {
 			wrap.classList.add(
-				...user.type
+				user.type
 			);
+
+			user.lastMessage = new Date().getTime();
 		}
 
 		if (data.msg.metadata.graymute) {
@@ -1263,6 +1371,7 @@ function addChatMsg(data, _to) {
 		}
 
 		to[0].lastMsgRecvBy = "";
+
 		switch (data.msg.emote) {
 			case 'spoiler':
 			case 'sweetiebot':
@@ -1294,16 +1403,14 @@ function addChatMsg(data, _to) {
 			}
 			case 'server':
 			case 'poll': {
-				let inner = createElement('span');
+				let inner = msgText;
 
-				if (data.msg.emote === 'poll') {
-					inner.innerHTML = `${nick} has created a new poll: "${msgText}"`;
-				} else {
-					inner.innerHTML = msgText;
+				if (data.msg.emote === "poll") {
+					inner = `${nick} has created a new poll: "${msgText}"`;
 				}
 
 				message.append(
-					inner
+					createElement('span', {html: inner})
 				);
 
 				break;
@@ -1327,23 +1434,17 @@ function addChatMsg(data, _to) {
 			case 'drink': {
 				wrap.classList.add('drinkWrap');
 
-				const table = createElement('table');
-				const row = createElement('tr');
-				const thing = createElement('td');
-
-				row.append(
-					thing
-				)
-
-				thing.append(
-					createElement('span', {class: 'nick', text: `${nick}:`}),
-					createElement('span', {class: 'msg'})
-				)
-
-				thing.lastChild.innerHTML = `${msgText} drink!`;
+				const table = createElement('table', {}, 
+					createElement('tr', {}, 
+						createElement('td', {}, 
+							createElement('span', {class: 'nick', text: `${nick}:`}),
+							createElement('span', {class: 'msg', html: `${msgText} drink!`})
+						)
+					)
+				);
 
 				if (data.msg.multi) {
-					row.append(
+					table.firstChild.append(
 						createElement(
 							'td',
 							{},
@@ -1352,9 +1453,6 @@ function addChatMsg(data, _to) {
 					)
 				}
 
-				table.append(
-					row
-				)
 				message.append(
 					table
 				)
@@ -1362,21 +1460,20 @@ function addChatMsg(data, _to) {
 				break;
 			}
 			case false: {
-				if (to[0].lastMsgRecvBy != nick) {
-					let name = createElement('span', {class: 'nick'});
+				if (to[0].lastMsgRecvBy !== nick) {
+					let name = createElement('span', {class: 'nick', text: nick});
 
 					if (metadata.nameflaunt) {
 						name.classList.add('flaunt', `level_${data.msg.type}`)
 					}
 
 					if (metadata.flair) {
-						name.textContent = nick;
 						name.append(
 							createElement('div', {class: `flair flair_${metadata.flair}`}),
 							':'
 						);
 					} else {
-						name.textContent = `${nick}:`
+						name.textContent.concat(':');
 					}
 
 					message.append(
@@ -1385,14 +1482,11 @@ function addChatMsg(data, _to) {
 
 					includeTimestamp = true;
 				}
-				let inner = createElement('span', {class: 'msg'});
 
-				inner.append(
-					formatChatMsg(msgText)
-				);
-				
 				message.append(
-					inner
+					createElement('span', {class: 'msg'},
+						createElement('span', {class: 'msg'}, formatChatMsg(msgText))
+					)	
 				);
 
 				to[0].lastMsgRecvBy = nick;
@@ -1402,6 +1496,11 @@ function addChatMsg(data, _to) {
 				dbg(`Unknown message type, how? ${data.msg.emote}`)
 			}
 		}
+
+		console.warn(
+			message,
+			data
+		)
 
 		if (isSquee && ['act', 'sweetiebot', 'rcv', false].includes(data.msg.emote)) {
 			wrap.classList.add("highlight");
@@ -1413,13 +1512,9 @@ function addChatMsg(data, _to) {
 			Array.from(to[0].childNodes).slice(0, -500).forEach(n => n.remove())
 		}
 
-		var d = new Date(data.msg.timestamp);
-
-		if (user) {
-			user.lastMessage = d.getTime();
-		}
-
 		if (includeTimestamp) {
+			var d = new Date(data.msg.timestamp ?? Date.now());
+
 			const h = addZero(d.getHours());
 			const m = addZero(d.getMinutes());
 			const s = addZero(d.getSeconds());
@@ -1457,10 +1552,6 @@ function doSqueeNotify() {
 }
 
 function manageDrinks(drinks) {
-	console.warn(
-		drinks
-	)
-
 	//once #v exists so does #drinkCounter and #drinkWrap
 	whenExists('#drinkWrap > #v', (v) => {
 		const wrap = v[0].parentElement;
@@ -1618,40 +1709,37 @@ function plSearch(term) {
 		$("#plul li.history").remove();
 		$("#plul li .title").removeAttr("active-offset");
 		scrollToPlEntry(ACTIVE.domobj.index());
-	} else {
-		if (TYPE >= 1 || LEADER) {
-			socket.emit('searchHistory', { search: term });
-		}
-
-		$("#playlist").addClass("searching");
-		$("#plul li").addClass("search-hidden");
-		$("#plul li.active").removeClass("search-hidden");
-
-		const rx = new RegExp(term, 'i');
-		const activeIndex = ACTIVE.domobj.index();
-
-		elem = PLAYLIST.first;
-		for (var i = 0; i < PLAYLIST.length; i++) {
-			let name = decodeURI(elem.videotitle);
-			
-			if (name.match(rx)) {
-				dbg(name);
-				var index = i - activeIndex;
-				if (index < 0) {
-					index = '(' + index + ') ';
-				}
-				else if (index > 0) {
-					index = '(+' + index + ') ';
-				}
-				else {
-					index = '';
-				}
-				elem.domobj.removeClass("search-hidden").find(".title").attr("active-offset", index);
-			}
-			elem = elem.next;
-		}
-		scrollToPlEntry(0);
+		return;
 	}
+
+	if (TYPE >= 1 || LEADER) {
+		socket.emit('searchHistory', { search: term });
+	}
+
+	$("#playlist").addClass("searching");
+	$("#plul li").addClass("search-hidden");
+	$("#plul li.active").removeClass("search-hidden");
+
+	const rx = new RegExp(term, 'i');
+	const activeIndex = ACTIVE.domobj.index();
+
+	PLAYLIST.each((video, index) => {
+		const name = decodeURI(video.videotitle);
+		const item = video.domobj[0];
+
+		if (rx.test(name)) {
+			const diff = index - activeIndex;
+			const str = diff !== 0 ? `(${diff > 0 ? '+' : '-'})` : '';
+			
+			
+			item.classList.remove('search-hidden');
+			item.querySelector('.title').setAttribute('active-offset', str);
+		} else {
+			item.classList.add('search-hidden');
+		}
+	})
+
+	scrollToPlEntry(0);
 }
 function newPoll(data) {
 	if (data.ghost && IGNORE_GHOST_MESSAGES) {
@@ -1804,6 +1892,20 @@ function updatePoll(data) {
 	const $title = $poll.find('.title');
 	let pollTitle = getPollTitle(data);
 
+	/*
+	const poll = document.querySelector('.poll.active');
+	const title = poll.querySelector('.title');
+
+	if (window.Bem) {
+		title.textContent = title.textContent.replace(/\\\\([\w-]+)/i, '[](/$1)');
+		Bem.applyEmotesToTextNode($(title));
+	}
+
+	switch (data.pollType) {
+		case "ranked": 
+	}
+	*/
+
 	if (typeof Bem !== 'undefined') {
 		pollTitle = pollTitle.replace(/\\\\([\w-]+)/i, '[](/$1)');
 		$title.html(Bem.applyEmotesToStr(pollTitle));
@@ -1831,25 +1933,26 @@ function updateRankedPollEmotes() {
 		return;
 	}
 
-	const $poll = $(".poll.active");
+	const poll = document.querySelector('.poll.active');
+	const options = poll.querySelector('.render-emotes');
 
-	// the ranked poll module code re-creates the results DOM
-	// so we have to re-apply our emotes when it is updated
-	$poll.find(".render-emotes").each(function () {
-		const $this = $(this);
-		if ($this.data("bem-processed")) {
+	for (const option of options) {
+		if (option.emotesRendered) {
 			return;
 		}
 
-		$this.data("bem-processed", true);
-		$this.html(Bem.applyEmotesToStr($this[0].innerText));
-		Bem.postEmoteEffects($this);
-	});
+		option.emotesRendered = true;
+		Bem.applyEmotesToTextNode(option);
+	}
 }
 function updatePollAutoClose($poll, data) {
 	const $progress = $poll.find(".poll-auto-close__progress-bar-inner");
 	const $timeLeft = $poll.find(".poll-auto-close__time-left");
 	const $autoClose = $poll.find(".poll-auto-close");
+
+	/*
+	const 
+	*/
 
 	if (data.closePollInSeconds > 0) {
 		$autoClose.addClass("enabled");
@@ -1870,7 +1973,7 @@ function updatePollAutoClose($poll, data) {
 					? `closing in ${secondsToHuman(timeLeftInSeconds)}`
 					: "closing poll...");
 
-				$progress.css("width", `${percent * 100}%`);
+				$progress[0].style.width = `${percent * 100}%`;
 			},
 			onDispose() {
 				$timeLeft.text("closing poll...");
@@ -1904,11 +2007,6 @@ function getPollTitle({ votes, extended }) {
 function setStorage(key, value) {
 	localStorage.setItem(key, value);
 }
-function setCookie(c_name, value, exdays) {
-	// Kept for backwards compatability. Update references when found.
-	console.log("Old setCookie ref, update please!");
-	return setStorage(c_name, value);
-}
 function getStorage(key) {
 	return localStorage.getItem(key);
 }
@@ -1939,22 +2037,20 @@ function getStorageToggle(key) {
 	return localStorage.getItem(key) === "true";
 }
 
-function getCookie(c_name) {
-	// Kept for backwards compatability. Update references when found.
-	console.log("Old getCookie ref, update please!");
-	return getStorage(c_name);
-	/*
-	var i,x,y,ARRcookies=document.cookie.split(";");
-	for (i=0;i<ARRcookies.length;i++){
-		x=ARRcookies[i].substr(0,ARRcookies[i].indexOf("="));
-		y=ARRcookies[i].substr(ARRcookies[i].indexOf("=")+1);
-		x=x.replace(/^\s+|\s+$/g,"");
-		if(x==c_name){
-			return unescape(y);
+function addVideoEntryControls(entry) {
+	if (controlsPlaylist()) {
+		entry.append(
+			createQueueButton()
+		)
+
+		if (canDeleteVideo()) {
+			entry.append(
+				createDeleteButton()
+			)
 		}
 	}
-	*/
 }
+
 function addVideo(data, queue, sanityid) {
 	dbg("Adding Video");
 	dbg(data);
@@ -1982,6 +2078,9 @@ function addVideo(data, queue, sanityid) {
 	const jq = $(entry);
 
 	data.domobj = jq;
+
+	addVideoEntryControls(entry);
+
 	entry.onDoubleClick = function() {
 		if (controlsVideo()) {
 			doPlaylistJump($(this))
@@ -2002,115 +2101,63 @@ function attachAreaEdit(elem, name) {
 		return;
 	}
 
-	/*
-	const editBtn = createElement('button', {text: 'Edit', class: 'editBtn'})
-	const buttons = createElement('div', {}, 
-		createElement('button', {class: 'areaSave', text: 'Save'}),
-		createElement('button', {class: 'areaCancel', text: 'Cancel'})
-	),
-	const editor = createElement('div', {class: 'areaEditWrap'},
-		createElement('textarea'),
-		buttons
-	);
+	var orig = $(elem);
+	var editbtn = $('<button>Edit</button>').addClass("editBtn").insertAfter(orig);
 
-	buttons[0].onclick = function() {
-		const textarea = this.parentNode.previousSibling;
+	editbtn.hover(function () {
+		orig.css("background-image", "url(" + CDN_ORIGIN + "/images/attn.png)");
+	}, function () {
+		orig.css("background-image", "none");
+	});
 
-		socket.emit("setAreas", {
-			content: textarea.value,
-			areaname: name
-		});
+	editbtn.click(function () {
 
-		elem[0].classList.remove('editing');
-		this.closest('.areaEditWrap')?.remove();
-	}
+		var minheight = 100;
+		var editor_wrap = $('<div></div>').insertAfter(orig);
+		var editor = $('<textarea></textarea>').appendTo(editor_wrap);
+		var btndiv = $('<div></div>').appendTo(editor_wrap);
+		var okbtn = $('<button>Save</button>').appendTo(btndiv);
+		var nobtn = $('<button>Cancel</button>').appendTo(btndiv);
 
-	buttons[1].onclick =  function() {
-		elem[0].classList.remove('editing');
-		this.closest('.areaEditWrap')?.remove();
-	}
-
-	editBtn.onclick = function() {
-		elem[0].append(
-			editor
-		);
-
-		elem[0].classList.add('editing');
-		editor.firstChild.innerHTML = elem[0].innerHTML;
-	}
-
-	*/
-
-	if (canSetAreas()) {
-		var orig = $(elem);
-		var editbtn = $('<button>Edit</button>').addClass("editBtn").insertAfter(orig);
-
-		editbtn.hover(function () {
-			orig.css("background-image", "url(" + CDN_ORIGIN + "/images/attn.png)");
-		}, function () {
-			orig.css("background-image", "none");
-		});
-
-		editbtn.click(function () {
-
-			var minheight = 100;
-			var editor_wrap = $('<div></div>').insertAfter(orig);
-			var editor = $('<textarea></textarea>').appendTo(editor_wrap);
-			var btndiv = $('<div></div>').appendTo(editor_wrap);
-			var okbtn = $('<button>Save</button>').appendTo(btndiv);
-			var nobtn = $('<button>Cancel</button>').appendTo(btndiv);
-
-			okbtn.click(function () {
-				var newhtml = editor.val();
-				editbtn.show();
-				orig.show();
-				socket.emit("setAreas", {
-					content: newhtml,
-					areaname: name
-				});
-				editor_wrap.remove();
+		okbtn.click(function () {
+			var newhtml = editor.val();
+			editbtn.show();
+			orig.show();
+			socket.emit("setAreas", {
+				content: newhtml,
+				areaname: name
 			});
-
-			nobtn.click(function () {
-				orig.show();
-				editbtn.show();
-				editor_wrap.remove();
-			});
-
-			editor.html(orig.html());
-			editor_wrap.height(Math.max(minheight, orig.height()));
-			editor_wrap.width(orig.width());
-			editor.width(orig.width());
-			editor.height(editor_wrap.height() - btndiv.height());
-			orig.hide();
-			editbtn.hide();
-
+			editor_wrap.remove();
 		});
-	}
+
+		nobtn.click(function () {
+			orig.show();
+			editbtn.show();
+			editor_wrap.remove();
+		});
+
+		editor.html(orig.html());
+		editor_wrap.height(Math.max(minheight, orig.height()));
+		editor_wrap.width(orig.width());
+		editor.width(orig.width());
+		editor.height(editor_wrap.height() - btndiv.height());
+		orig.hide();
+		editbtn.hide();
+
+	});
 }
 function setVidVolatile(pos, isVolat) {
-	elem = PLAYLIST.first;
-	for (var i = 0; i < pos; i++) {
-		elem = elem.next;
-	}
+	const video = PLAYLIST.at(pos);
 
-	elem.volat = isVolat;
-	if (isVolat) {
-		$(elem.domobj).addClass("volatile");
-	} else {
-		$(elem.domobj).removeClass("volatile");
-	}
-	console.log(elem.domobj);
+	video.volat = isVolat;
+	video.domobj[0].classList.toggle('volatile', isVolat);
 }
 function setVidColorTag(pos, tag, volat) {
-	elem = PLAYLIST.first;
-	for (var i = 0; i < pos; i++) {
-		elem = elem.next;
-	}
-	_setVidColorTag(elem.domobj[0], tag, volat);
+	_setVidColorTag(PLAYLIST.at(pos).domobj[0], tag, volat);
 }
 function _setVidColorTag(domobj, tag, volat) {
 	var ct = domobj.querySelector(".colorTag");
+
 	if (!ct) {
 		ct = createElement('div', {class: 'colorTag'});
 		domobj.prepend(ct);
@@ -2150,58 +2197,31 @@ function controlsVideo() {
 	return TYPE > 0 && LEADER;
 }
 function controlsPlaylist() {
-	if (TYPE > 0) {
-		return true;
-	}
-	return LEADER;
+	return TYPE > 0 || LEADER;
 }
 function canColorTag() {
-	if (TYPE > 0) {
-		return true;
-	}
-	return false;
+	return TYPE > 0;
 }
 function canToggleVolatile() {
-	if (TYPE > 0) {
-		return true;
-	}
-	return false;
+	return TYPE > 0;
 }
 function canTempShadowBan() {
-	if (TYPE >= 2) {
-		return true;
-	}
-	return false;
+	return TYPE >= 2;
 }
 function canSeeAdminLog() {
-	if (TYPE >= 2) {
-		return true;
-	}
-	return false;
+	return TYPE >= 2;
 }
 function canDeleteVideo() {
-	if (TYPE > 0) {
-		return true;
-	}
-	return false;
+	return TYPE > 0;
 }
 function canSetFilters() {
-	if (TYPE >= 2) {
-		return true;
-	}
-	return false;
+	return TYPE >= 2;
 }
 function canRandomizeList() {
-	if (TYPE > 0) {
-		return true;
-	}
-	return false;
+	return TYPE > 0;
 }
 function canCreatePoll() {
-	if (TYPE > 0) {
-		return true;
-	}
-	return LEADER;
+	return TYPE > 0 || LEADER;
 }
 function canClosePoll() {
 	return canCreatePoll();
@@ -2210,47 +2230,21 @@ function canChat() {
 	return NAME && TYPE >= -1;
 }
 function canMoveBerry() {
-	if (TYPE >= 1) {
-		return true;
-	}
-	return false;
+	return TYPE >= 1;
 }
 function canKickUser() {
-	if (TYPE >= 2) {
-		return true;
-	}
-	return false;
+	return TYPE >= 2;
 }
 function canShadowBan() {
-	if (TYPE >= 2) {
-		return true;
-	}
-	return false;
+	return TYPE >= 2;
 }
 function canBan() {
-	if (TYPE >= 2) {
-		return true;
-	}
-	return false;
+	return TYPE >= 2;
 }
 function canSetAreas() {
-	if (TYPE >= 2) {
-		return true;
-	}
-	return false;
+	return TYPE >= 2;
 }
 /* Video Control */
-function videoPlayNext() {
-	if (controlsPlaylist()) {
-		socket.emit("playNext");
-	}
-}
-function videoGetTime(callback) {
-	PLAYER.getTime(callback);
-}
-function videoGetState() {
-	return PLAYER.getVideoState();
-}
 function videoSeekTo(pos) {
 	console.log("Got seek to", secToTime(pos));
 	PLAYER.seek(pos);
@@ -2289,9 +2283,43 @@ function videoLoadAtTime(vidObj, time) {
 function videoPause() {
 	PLAYER.pause();
 }
+
+async function parseVideoURLAsync(url) {
+	return new Promise((res, rej) => {
+		const match = Videosources.find(reg => reg[2].test(url));
+
+		if (!match) {
+			return rej(new Error("Uknown or unsupported videolink"))
+		}
+	
+		const [source, whole, regex, title] = match;
+		const matches = url.match(regex);
+
+		let id = whole ? url : matches[1];
+
+		//this is a pain to integrate into a nice package (could with regex)
+		if (source === 'dash' && url.includes('watch.cloudflarestream.com')) {
+			id = `https://cloudflarestream.com/${id}/manifest/video.mpd`;
+		}
+
+		res({id, source, title})
+	})
+}	
+
 /* Utilities */
 function parseVideoURL(url, callback) {
 	console.log(url);
+
+	/*
+	const match = Sources.find(source => source.regex.test(url));
+
+	if (!match) {
+		dbg("Uknown or unsupported videolink");
+		return;
+	}
+
+	
+	*/
 	var m = url.match(new RegExp("youtube\\.com/watch.*?[&?]v=([a-zA-Z0-9_-]{11})")); if (m) { callback(m[1], "yt"); return; }
 	var m = url.match(new RegExp("youtu\\.be/([a-zA-Z0-9_-]{11})")); if (m) { callback(m[1], "yt"); return; }
 	var m = url.match(new RegExp("i\\.ytimg\\.com/an_webp/([a-zA-Z0-9_-]{11})/")); if (m) { callback(m[1], "yt"); return; }
@@ -2334,124 +2362,22 @@ function formatChatMsg(msg, greentext) {
 
 	return message;
 }
-function secondsToString(seconds) {
-
-	var minutes = Math.floor(seconds / 60);
-	var seconds = Math.floor(seconds % 60);
-	var hours = Math.floor(minutes / 60);
-	var minutes = Math.floor(minutes % 60);
-	var days = Math.floor(hours / 24);
-	var hours = Math.floor(hours % 24);
-
-	days = days = days.toString();
-
-	if (hours < 10) {
-		hours = "0" + hours.toString();
-	} else {
-		hours = hours.toString();
-	}
-
-	if (minutes < 10) {
-		minutes = "0" + minutes.toString();
-	} else {
-		minutes = minutes.toString();
-	}
-
-	if (seconds < 10) {
-		seconds = "0" + seconds.toString();
-	} else {
-		seconds = seconds.toString();
-	}
-
-	return days + ":" + hours + ":" + minutes + ":" + seconds;
-}
-function isMainGameOn() {
-	TIME = new Date();
-	// Main game runs from 4AM Saturday UTC "to" 10AM Saturday UTC.
-	if (
-		TIME.getUTCDay() == 6 && // 6 for Saturday
-		TIME.getUTCHours() >= 4 &&
-		TIME.getUTCHours() < 10
-	) {
-		return true;
-	}
-	return false;
-}
-function timeToMainGame() {
-	var WEEK = 604800;
-	TIME = new Date();
-	GAME = new Date();
-	var startDay = 6;
-	var startHr = 4;
-	var stopHr = 10;
-
-	var dayOffset = 0;
-	var day = TIME.getUTCDay();
-	while (day != startDay) {
-		dayOffset++;
-		day++;
-		if (day >= 7) {
-			day = 0;
-		}
-	}
-
-	console.log(TIME.getUTCDate() + dayOffset);
-	GAME.setUTCDate(TIME.getUTCDate() + dayOffset);
-	GAME.setUTCHours(startHr);
-	GAME.setUTCMinutes(0);
-	GAME.setUTCSeconds(-1);
-
-	var timeUntilGameStarts = (GAME.getTime() / 1000) - (TIME.getTime() / 1000);
-	if (timeUntilGameStarts < 0) {
-		timeUntilGameStarts += WEEK;
-	}
-
-	GAME.setUTCHours(stopHr);
-
-	var timeUntilGameStops = (GAME.getTime() / 1000) - (TIME.getTime() / 1000);
-	if (timeUntilGameStops < 0) {
-		timeUntilGameStops += WEEK;
-	}
-
-	return {
-		start: timeUntilGameStarts,
-		stop: timeUntilGameStops
-	};
-}
-/*function isMainGameOn(){
-	TIME = new Date();
-	var gameStartsAt = new Date()
-	// Get days to friday.
-	var dtf = (5 - TIME.getUTCDay())
-
-	var dow = DATE.getUTCDay()
-
-	if(dow = DATE.getUTCDay()
-}*/
 function detectName(nick, msg) {
-	var list = '';
+	let list = HIGHLIGHT_LIST;
+	
 	if (nick) {
-		list += nick;
+		list.push(nick);
 	}
-	for (var i in HIGHLIGHT_LIST) {
-		if (list.length > 0) {
-			list += '|';
-		}
-		list += HIGHLIGHT_LIST[i];
-	}
-	list = '(' + list + ')';
-	//list = `(${[nick ?? '', HIGHLIGHT_LIST.join('|')})`;
 
-	return (msg.match(RegExp("(^|[^-a-zA-Z0-9_])" + list + "([^a-zA-Z0-9_]|$)", 'i')) != null);
+	return new RegExp(`(${list.join('|')})`, 'gi').test(msg);
 }
 function tabComplete(elem) {
-	console.warn('tab')
 	var chat = elem.val();
 	var tabOptions = elem.data('tabcycle');
 	var hasTabOptions = (tabOptions !== undefined && tabOptions != false);
 	var result = [];
 
-	if (!hasTabOptions) {
+	if (!tabOptions) {
 		var onlyword = /^([^ ]*)$/i;
 		var endword = /([^ ]+)$/i;
 		var m = chat.match(endword);
@@ -2460,13 +2386,11 @@ function tabComplete(elem) {
 			return;
 		}
 
-		const who = m[1];
+		const re = new RegExp(`^${m[1]}.*`, 'i');
 
-		var re = new RegExp('^' + who + '.*', 'i');
-
-		for (const [key, value] of CHATLIST.entries()) {
-			if (key.match(re)) {
-				result.push({nick: key, lastchat: value.lastMessage})
+		for (const [nick, value] of CHATLIST.entries()) {
+			if (re.test(nick)) {
+				result.push({nick, lastchat: value.lastMessage})
 			}
 		}
 
@@ -2475,12 +2399,7 @@ function tabComplete(elem) {
 
 		const sanitize = (str) => {
 			str = chat.replace(endword, str);
-			if (chat.match(onlyword)) {
-				str += ": ";
-			}
-			else {
-				str += " ";
-			}
+			str += onlyword.test(chat) ? ": " : " ";
 
 			return str;
 		}
@@ -2489,10 +2408,9 @@ function tabComplete(elem) {
 			elem.val(sanitize(result[0].nick));
 		}
 		else if (result.length > 1) {
-			tabOptions = result.map((usr) => sanitize(usr.nick));
-
-			elem.data('tabcycle', tabOptions);
+			elem.data('tabcycle', result.map((usr) => sanitize(usr.nick)));
 			elem.data('tabindex', 0);
+
 			hasTabOptions = true;
 		}
 	}
@@ -2529,32 +2447,20 @@ function scrollToPlEntry(index) {
 function smartRefreshScrollbar() {}
 
 function setPlaylistPosition(to, scroll = false) {
+	console.trace('aaaa')
 	if (ACTIVE.domobj) {
 		ACTIVE.domobj[0].classList.remove("active");
 	}
 
-	var elem = PLAYLIST.first;
-	let length = PLAYLIST.length;
-	let index = 0;
-
-	ACTIVE = PLAYLIST.first;
-	for (var i = 0; i < length; i++) {
-
-		//dbg(elem.videoid+" =?= "+to.video.videoid);
-		if (elem.videoid == to.video.videoid) {
-			ACTIVE = elem;
-			index = i;
-			break;
-		}
-		elem = elem.next;
-	}
+	ACTIVE = PLAYLIST.find((video) => video.videoid === to.video.videoid);
 
 	if (ACTIVE.domobj) {
 		ACTIVE.domobj[0].classList.add("active");
-	}
 
-	if (getStorage("plFolAcVid") == 1) {
-		scrollToPlEntry(index > 2 ? index - 2 : index);
+		if (getStorage("plFolAcVid") == 1) {
+			let index = ACTIVE.domobj.index();
+			scrollToPlEntry(index > 2 ? index - 2 : index);
+		}
 	}
 }
 
@@ -2586,9 +2492,6 @@ function showChat(channel) {
 	}
 
 	scrollBuffersToBottom();
-
-	/*
-	*/
 }
 
 function cycleChatTab(left) {
@@ -2605,55 +2508,41 @@ function cycleChatTab(left) {
 }
 
 function notifyNewMsg(channel, isSquee, isRcv) {
-	if (ACTIVE_CHAT != channel) {
-		var maintab = $('#maintab');
-		var admintab = $('#admintab');
-		switch (channel) {
-			case 'main':
-				maintab.addClass('newmsg');
-				if (isSquee) {
-					if (MAIN_NOTIFY) {
-						clearInterval(MAIN_NOTIFY);
-					}
-					maintab.addClass('squee');
-					MAIN_NOTIFY = setInterval(function () {
-						if (maintab.hasClass('squee')) {
-							maintab.removeClass('squee');
-						}
-						else {
-							maintab.addClass('squee');
-						}
-					}, 1000);
+	if (ACTIVE_CHAT === channel) {
+		return;
+	}
 
-					if (getStorage('notifyMute') == 0) {
-						NOTIFY.play();
-					}
-				}
-				break;
-			case 'admin':
-				admintab.addClass('newmsg');
-				if (isSquee || isRcv) {
-					if (ADMIN_NOTIFY) {
-						clearInterval(ADMIN_NOTIFY);
-					}
-					admintab.addClass('squee');
-					ADMIN_NOTIFY = setInterval(function () {
-						if (admintab.hasClass('squee')) {
-							admintab.removeClass('squee');
-							$('#chatpane').removeClass('squee');
-						}
-						else {
-							admintab.addClass('squee');
-							$('#chatpane').addClass('squee');
-						}
-					}, 1000);
+	const tabs = new Map([
+		['main', {el: document.querySelector('#maintab'), notify: MAIN_NOTIFY}],
+		['admin', {el: document.querySelector('#maintab'), notify: ADMIN_NOTIFY}],
+	]);
 
-					if (getStorage('notifyMute') == 0) {
-						NOTIFY.play();
-					}
-				}
-				break;
+	if (!tabs.has(channel)) {
+		return;
+	}
+
+	const tab = tabs.get(channel);
+
+	tab.el.classList.add('newmsg');
+	tab.el.classList.toggle('squee', isSquee);
+
+	if (!isSquee || (channel === "admin" && isRcv)) {
+		return;
+	}
+
+	if (tab.notify) {
+		clearInterval(tab.notify);
+	}
+
+	tab.notify = setInterval(() => {
+		if (isRcv) {
+			tab.el.closest('#chatpane')?.classList.toggle('squee');
 		}
+		tab.el.classList.toggle('squee');
+	}, 1000);
+
+	if (getStorage('notifyMute')) {
+		NOTIFY.play();
 	}
 }
 
@@ -2661,6 +2550,15 @@ function sortPlaylist(data) {
 	setVal("sorting", true);
 	var elem = PLAYLIST.first;
 	var fromelem, toelem;
+
+	/*
+	const [from, to] = PLAYLIST.multiple([data.from, data.to]);
+
+	if (data.to > data.from) {
+		
+	}
+	*/
+
 	for (var i = 0; i < PLAYLIST.length; i++) {
 		if (i == data.from) {
 			fromelem = elem;
@@ -2735,10 +2633,6 @@ function unfuckPlaylist() {
 	}
 }
 
-function refreshDebugDumps() {
-	DEBUG_DUMPS = [];
-	socket.emit('debugDump');
-}
 
 function secondsToHuman(seconds) {
 	seconds = parseInt(seconds);
