@@ -418,7 +418,7 @@ exports.SessionService = class extends ServiceBase {
 			return sendFailMessage("Too many login attempts", false);
 		}
 
-		if (!nick.match(/^[0-9a-zA-Z_]+$/) || nick.length < 1 || nick.length > 15) {
+		if (!nick.match(/^[\w]+$/) || nick.length < 1 || nick.length > 15) {
 			return sendFailMessage("Bad nick.");
 		}
 

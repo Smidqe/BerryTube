@@ -1,0 +1,69 @@
+.kiosk #rightpane,
+.kiosk #videobg {
+	top: 0 !important;
+	position: fixed !important
+}
+
+.kiosk #chatbuffer,
+.kiosk #rightpane,
+.kiosk #videobg {
+	top: 0 !important
+}
+
+.kiosk #chatbuffer,
+.kiosk #chatpane {
+	height: 100% !important;
+	overflow: hidden !important
+}
+
+.kiosk #chatbuffer,
+.kiosk #chatpane,
+.kiosk #rightpane,
+.kiosk #videobg,
+.kiosk #videowrap,
+.kiosk #videowrap iframe {
+	height: 100% !important
+}
+
+.kiosk #videobg {
+	width: 80% !important;
+	background: #000 !important
+}
+
+.kiosk #rightpane {
+	right: 0 !important;
+	width: 20% !important
+}
+
+.kiosk #chatbuffer {
+	width: 100% !important
+}
+
+.kiosk #chatpane {
+	width: auto !important
+}
+
+.kiosk #videowrap {
+	width: 100% !important
+}
+
+.kiosk #connectedCountWrapper {
+	width: 100% !important;
+	background: #fff !important
+}
+
+.kiosk #videowrap iframe {
+	width: 100% !important
+}
+
+.kiosk #rcvOverlay {
+	border: 0 !important
+}
+
+.kiosk #chatControls,
+.kiosk #chatinput,
+.kiosk #chatlist,
+.kiosk #leftpane,
+.kiosk .setNick {
+	display: none !important
+}

@@ -50,10 +50,15 @@ socket.on("recvNewPlaylist", function (data) {
 	for (var i in data) {
 		PLAYLIST.append(data[i]);
 	}
+
 	newPlaylist($("#plul"));
 	socket.emit("renewPos");
+	handleACL();
 });
 socket.on("recvPlaylist", async function (data) {
+
+	console.warn(data);
+
 	PLAYLIST = new LinkedList.Circular();
 	for (const video of data) {
 		PLAYLIST.append(video);
@@ -283,10 +288,13 @@ socket.on(
 	}
 );
 socket.on("setVidVolatile", function (data) {
-	setVidVolatile(data.pos, data.volat);
+	const video = PLAYLIST.at(data.pos);
+
+	video.volat = data.volat;
+	video.domobj[0].classList.toggle('volatile', isVolat);
 });
 socket.on("setVidColorTag", function (data) {
-	setVidColorTag(data.pos, data.tag, data.volat);
+	setVidColorTag(PLAYLIST.at(data.pos).domobj[0], data.tag, data.volat);
 });
 socket.on("kicked", function (reason) {
 	var msg = "You have been kicked";
@@ -363,10 +371,8 @@ socket.on('reconnect', function () {
 	$('#chatinput input').prop('disabled', false);
 	scrollBuffersToBottom();
 
-	var data = $('#headbar').data('loginData');
-
-	if (data != undefined) {
-		socket.emit('setNick', data);
+	if (localStorage["autologin"]) {
+		socket.emit('setNick', JSON.parse(localStorage.getItem("autologin")));
 	}
 });
 function cleanupSessionNick(s) {

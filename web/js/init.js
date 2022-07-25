@@ -330,23 +330,23 @@ function doDelete(entry) {
 }
 
 function doRequeue(entry) {
-	if (getVal("sorting") == true) { return; }
-	setVal("sorting", true);
-	console.trace("Called doRequeue()");
-
-	if (controlsPlaylist()) {
-		var from = entry.index();
-		var to = ACTIVE.domobj.index();
-		var id = entry[0].video.videoid;
-
-		if (from > to) { to++; }
-
-		socket.emit("sortPlaylist", {
-			from,
-			to,
-			sanityid: id
-		});
+	if (!controlsPlaylist() || getVal("sorting")) {
+		return;
 	}
+
+	setVal("sorting", true);
+
+	var from = entry.index();
+	var to = ACTIVE.domobj.index();
+
+	if (from > to) { to++; }
+
+	socket.emit("sortPlaylist", {
+		from,
+		to,
+		sanityid: entry[0].video.videoid
+	});
+
 	setVal("sorting", false);
 }
 
@@ -749,9 +749,10 @@ function showUserActions(who) {
 
 	/*
 	const options = [
-		{can: canMoveBerry, op: setBerry, text: ''},
-		{can: canMoveBerry, op: removeBerry, text: ''},
-		{can: canKickUser, op: removeBerry, text: ''},
+		{on: canMoveBerry, op: setBerry, text: ''},
+		{on: canMoveBerry, op: removeBerry, text: ''},
+		{on: canKickUser, op: removeBerry, text: ''},
+		{on: }
 	]
 
 	for (const opt of options) {
@@ -765,13 +766,6 @@ function showUserActions(who) {
 	}
 	*/
 
-	/*if (canMoveBerry()) {
-		var option = $('<li/>').text("Move berry").addClass('btn').appendTo(optWrap);
-		option.click(function () {
-			socket.emit("moveLeader", target);
-			cmds.window.close();
-		});
-	}*/
 	if (canMoveBerry()) {
 		var option = $('<li/>').text("Add berry").addClass('btn').appendTo(optWrap);
 		option.click(function () {
@@ -917,15 +911,9 @@ function addUser(data, sortafter, animate = false) {
 			$(user).show('blind')
 		}
 
-		if (data.nick === NAME) {
-			user.classList.add('me')
-		} else if (IGNORELIST.includes(data.nick)) {
-			user.classList.add('ignored')
-		}
-
-		if (data.shadowbanned) {
-			user.classList.add('sbanned');
-		}
+		user.classList.toggle('me', data.nick === NAME);
+		user.classList.toggle('ignored', IGNORELIST.includes(data.nick));
+		user.classList.toggle('sbanned', data.shadowbanned)
 
 		user.classList.add(typeMappings.get(data.type));
 
@@ -975,22 +963,22 @@ function rmUser(nick) {
 	CHATLIST.delete(nick);
 }
 
-function createColorGrid(volatile) {
+function createColorGrid(entry, volatile) {
 	const colorGrid = createElement('div', {class: 'colorGrid'});
 
 	for (const color of gridColors) {
-		const pixel = createElement('div', {class: 'swatch kill'});
+		const pixel = createElement('div', {class: 'swatch'});
 		const clear = color === '#xxxxxx';
 
-		if (!clear) {
-			pixel.classList.remove('kill')
-			pixel.style.backgroundColor = color
+		if (clear) {
+			pixel.classList.add('kill')
 		}
 
 		if (volatile) {
 			pixel.classList.add('volatile')
 		}
 
+		pixel.style.backgroundColor = color
 		pixel.onclick = () => doColorTag(entry, clear ? false : color, false)
 		
 		colorGrid.append(
@@ -1000,81 +988,66 @@ function createColorGrid(volatile) {
 
 	return colorGrid
 }
-function addVideoControls(entry, optionList) {
-	const video = entry[0].video;
-	
-	// Volatile Button
-	if (canToggleVolatile()) {
-		var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-		$("<span/>").text("Toggle Volatile").appendTo(optBtn);
-		optBtn.click(function () {
-			doVolatile(entry);
-		});
-	}
-	// Jump to Button
-	if (controlsPlaylist() && video != ACTIVE) {
-		var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-		$("<span/>").text("Jump to Video").appendTo(optBtn);
-		optBtn[0].onclick = confirmClick(optBtn[0], () => doPlaylistJump(entry))
-	}
-	// Skip Button
-	if (controlsPlaylist() && video == ACTIVE) {
-		var optBtn = $("<div/>").addClass("button").appendTo($("<li/>").appendTo(optionList));
-		$("<span/>").text("Skip Video").appendTo(optBtn);
-		optBtn.click(function () {
-			if (!controlsPlaylist()) {
-				return;
-			}
-
-			socket.emit("playNext");
-		});
+function skipVideo(video) {
+	//check if we are at ACTIVE
+	if (video !== ACTIVE) {
+		return;
 	}
 
-	let info = ['', ''];
+	socket.emit("playNext");
+}
+function toggleEndNotification(video) {
+	if (video !== ACTIVE) {
+		return;
+	}
+
+	video.domobj[0].classList.toggle('notify', MONITORED_VIDEO === null)
+	MONITORED_VIDEO = MONITORED_VIDEO ? null : video;
+}
+
+function isActive(video) {
+	return video === ACTIVE;
+}
+
+function openVideoSource(video) {
+	let source = '';
 
 	switch (video.videotype) {
-		case 'yt': info = ['yt', 'Youtube', `https://youtu.be/${video.videoid}`]; break;
-		case 'vimeo': info = ['vimeo', `https://youtu.be/${video.videoid}`]; break;
-		case 'dm': info = ['dm', `https://youtu.be/${video.videoid}`]; break;
-		case 'soundcloud': info = ['soundcloud', 'Soundcloud', video.meta.permalink]; break;
+		case 'yt': source = `https://youtu.be/${video.videoid}`; break;
+		case 'vimeo': source = `https://youtu.be/${video.videoid}`; break;
+		case 'dm': source = `https://youtu.be/${video.videoid}`; break;
+		case 'soundcloud': source = video.meta.permalink; break;
 		default:
 			break;
 	}
 
-	if (info[0].length > 0) {
-		const button = createElement(
-			'div', {class: 'button'},
-			createElement('span', {text: `Open on ${info[1]}`})
-		);
-	
-		button.onclick = () => {
-			if (video.videotype === 'soundcloud' && !info[2]) {
-				return;
-			}
-			
-			window.open(info[2], '_blank');
-		}
-		
-		optionList[0].append(
-			createElement('li', {}, button)
-		);
-	}
+	window.open(source, '_blank');
+}
 
+function addVideoControls(entry, optionList) {
+	const video = entry[0].video;
+	const options = [
+		{text: 'Toggle volatile', fn: doVolatile},
+		{text: 'Jump to video', fn: doPlaylistJump},
+		{on: isActive, text: 'Skip video', fn: skipVideo},
+		{text: 'Open at source', fn: openVideoSource},
+		{on: isActive, text: 'Toggle video end notification', fn: toggleEndNotification}
+	];
 
-	// Video end notification
-	if (entry[0].video == ACTIVE) {
-		const button = createElement('div', {class: 'button'},
-			createElement('span', {text: 'Toggle video end notification'})
-		);
-
-		button.onclick = function() {
-			ACTIVE.domobj[0].classList.toggle('notify', MONITORED_VIDEO === null)
-			MONITORED_VIDEO = MONITORED_VIDEO ? null : ACTIVE;
+	for (const option of options) {
+		if (option.on && !option.on(video)) {
+			continue;
 		}
 
+		const button = createElement('div', {class: 'button', text: option.text});
+
+		button.addEventListener('click', () => option.fn(video));
+
 		optionList[0].append(
-			createElement('li', {}, button)
-		);
+			createElement('li', {}, 
+				button
+			)
+		)
 	}
 
 	// Color Tags
@@ -1084,8 +1057,8 @@ function addVideoControls(entry, optionList) {
 				createElement('hr')
 			),
 			createElement('li', {},
-				createColorGrid(true),
-				createColorGrid(false)
+				createColorGrid(entry[0], true),
+				createColorGrid(entry[0], false)
 			)
 		)
 	}
@@ -1170,9 +1143,9 @@ function initPlaylistControls(plwrap) {
 	// Add controls
 	var plcontrolwrap = $('<div id="playlistAddControls"/>').insertBefore(plwrap);
 	var openVideoButton = $('<div/>').addClass('slideBtn').text("Import Video").appendTo(plcontrolwrap);
-	var videoImportWrap = $('<div/>').addClass('import').insertAfter(openVideoButton);
+	var videoImportWrap = $('<div/>').addClass('import hidden').insertAfter(openVideoButton);
 	openVideoButton.click(function () {
-		this.firstElementChild.classList.toggle('hidden');
+		this.nextSibling.classList.toggle('hidden');
 	});
 
 	$('<div/>').addClass("note").html('Video or <a target="_blank" href="manifest.php">manifest</a> URL:').appendTo(videoImportWrap);
@@ -1311,14 +1284,14 @@ function initMultiqueue(){
 	}
 }
 
-function doPlaylistJump(elem) {
-	if (!controlsPlaylist()) {
+function doPlaylistJump(video) {
+	if (!controlsPlaylist() || video === ACTIVE) {
 		return;
 	}
 
 	socket.emit("forceVideoChange", { 
-		index: $(elem).index(), 
-		sanityid: elem[0].video.videoid 
+		index: $(video.domobj).index(), 
+		sanityid: video.videoid 
 	});
 }
 
@@ -1333,7 +1306,7 @@ function createPlaylistItem(data) {
 	const item = createElement('li');
 	
 	if (data.meta.colorTag) {
-		_setVidColorTag(item, data.meta.colorTag, data.meta.colorTagVolat || false);
+		setVidColorTag(item, data.meta.colorTag, data.meta.colorTagVolat || false);
 	}
 
 	item.append(
@@ -1549,25 +1522,22 @@ function initChatControls(parent) {
 	var _loginAs = $('<div/>').addClass('loginAs').text("Logged in as:").appendTo(chatControls);
 	var loginAs = $('<span/>').addClass('nick').text("anonymous").appendTo(_loginAs);
 	loginAs.click(function () {
-		if (TYPE > 1) {
-			if ($(this).hasClass("flaunt")) {
-				NAMEFLAUNT = false;
-				$(this).removeClass("flaunt", 100);
-			} else {
-				NAMEFLAUNT = true;
-				$(this).addClass("level_" + TYPE);
-				$(this).addClass("flaunt", 100);
-			}
+		if (TYPE <= 1) {
+			return;
+		}
+
+		NAMEFLAUNT = !this.classList.contains('flaunt');
+
+		if (NAMEFLAUNT) {
+			this.classList.add(`level_${TYPE}`, 'flaunt');
+		} else {
+			this.classList.remove(`level_${TYPE}`, 'flaunt')
 		}
 	});
 
 	initFlairOpts();
 	var flairMenuWrap = $('<div/>').attr('id', 'flairMenu').appendTo(chatControls);
 	
-	console.warn(
-		FLAIR_OPTS
-	)
-
 	flairMenuWrap[0].append(
 		createElement('div', {class: 'flairMenuItems hidden'},
 			...FLAIR_OPTS
@@ -1688,9 +1658,7 @@ function initChat(parent) {
 			pass: false
 		};
 
-		$('#headbar').data('loginData', data);
 		socket.emit("setNick", data);
-
 		this.value = '';
 	}
 
@@ -1748,10 +1716,10 @@ function initLogoutForm(headbar) {
 
 	var logoutbtn = $('<div/>').addClass("submit").text("Logout").appendTo($('<td/>').appendTo(row));
 	logoutbtn.click(function () {
-		if (typeof localStorage != 'undefined') {
-			localStorage.removeItem('nick');
-			localStorage.removeItem('pass');
+		if (localStorage["autologin"]) {
+			localStorage.removeItem("autologin")
 		}
+
 		logoutForm.submit();
 	});
 }
@@ -1760,12 +1728,12 @@ function createLoginForm() {
 		[
 			{for: 'loginname', text: 'Username'}, 
 			{id: 'loginname', type: 'text', autocomplete: 'username'}, 
-			{class: 'submit', text: 'Register'}
+			{class: 'submit register', text: 'Register'}
 		],
 		[
 			{for: 'loginpass', text: 'Password'}, 
 			{id: 'loginpass', type: 'password', autocomplete: 'current-password'}, 
-			{class: 'submit', text: 'Login'}
+			{class: 'submit login', text: 'Login'}
 		]
 	];
 
@@ -1774,8 +1742,18 @@ function createLoginForm() {
 			createElement('td', {}, createElement('label', row[0])),
 			createElement('td', {}, createElement('input', row[1])),
 			createElement('td', {}, createElement('div', row[2])),
-		)
+		),
 	));
+
+	table.append(
+		createElement('tr', {}, 
+			createElement('td', {}, 
+				createElement('label', {text: "Remember Me"}, 
+					createElement('input', {type: 'checkbox', checked: "checked", id: "rememberMe"})
+				),
+			)
+		)
+	)
 
 	return table;
 }
@@ -1813,10 +1791,13 @@ function createRegistrationForm() {
 async function initLoginForm(headbar) {
 	const table = createLoginForm();
 	const submitter = function() {
+		const form = this.closest('form');
+
 		$('#headbar .loginError').html('');
-		var nick = this["loginname"].value;
-		var pass = this["loginpass"].value;
-		var pass2 = this["regpass2"]?.value;
+
+		var nick = form["loginname"].value;
+		var pass = form["loginpass"].value;
+		var pass2 = form["regpass2"]?.value;
 		
 		var data = { nick: nick, pass: pass };
 
@@ -1824,7 +1805,9 @@ async function initLoginForm(headbar) {
 			data['pass2'] = pass2;
 		}
 
-		$(headbar).data('loginData', data);
+		if (form["rememberMe"].checked) {
+			localStorage.setItem('autologin', JSON.stringify(data));
+		}
 
 		if (pass2) {
 			socket.emit('registerNick', data);
@@ -1839,37 +1822,33 @@ async function initLoginForm(headbar) {
 		createElement('div', {}, 
 			createElement('form', {method: 'post'}, table)
 		),
-		createElement('label', {text: "Remember Me"}, 
-			createElement('input', {type: 'checkbox', checked: "checked", class: "rememberMe"})
-		),
 		createElement('div', {class: 'loginError'})
 	);
-
-	table.onsubmit = submitter;
-	table.querySelector('.submit').addEventListener('click', function() {
-		const register = createRegistrationForm();
-		const head = this.closest('#headbar');
-
-		register.onsubmit = submitter;
-		
-		head.firstElementChild.classList.add('hidden');
-		head.firstElementChild.after(
-			createElement('div', {}, 
-				createElement('form', {method: 'post'}, register)
-			),
-		)
+	
+	table.querySelector('.login').addEventListener('click', submitter);
+	table.querySelector('.register').addEventListener('click', function() {
+		if (this.classList.contains('register')) {
+			const register = createRegistrationForm();
+			const head = this.closest('#headbar');
+	
+			register.onsubmit = submitter;
+			
+			head.firstElementChild.classList.add('hidden');
+			head.firstElementChild.after(
+				createElement('div', {}, 
+					createElement('form', {method: 'post'}, register)
+				),
+			)
+		}
 	});
 
-	// Autologin.
-	if (typeof localStorage != 'undefined') {
-		const nick = localStorage.getItem('nick');
-		const pass = localStorage.getItem('pass');
+	if (localStorage["autologin"]) {
+		const details = JSON.parse(localStorage.getItem("autologin"));
 
-		if (nick && pass) {
-			const data = { nick: nick, pass: pass };
-			$(headbar).data('loginData', data);
-			socket.emit('setNick', data);
-		}
+		socket.emit('setNick', {
+			nick: details.nick,
+			pass: details.pass
+		});
 	}
 }
 function initDrinkCounter() {

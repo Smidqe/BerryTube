@@ -1124,7 +1124,7 @@ function gakify(node) {
 			return '';
 		}
 		else {
-			return text.replace(/[a-zA-Z0-9\.']+/g, 'GAK');
+			return text.replace(/[\w.']+/g, 'GAK');
 		}
 	}
 }

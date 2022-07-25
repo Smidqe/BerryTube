@@ -88,7 +88,7 @@ body {
 
 
 .dd-jquery{
-	display:none;
+	display: none;
 }
 #chatControls .loginAs {
     float: left;
@@ -297,7 +297,7 @@ body {
     color: #FFCC00;
 }
 #playlist .viewport ul li.search-hidden {
-    display:none !important;
+    display: none !important;
 }
 #playlist ul li.volatile {
     background: none repeat scroll 0 0 #690000;
@@ -360,7 +360,7 @@ body {
     border-left: 1px solid #732C7B;
 	background: black url(/images/purpledot.png) repeat-x 0 0;
 }
-#searchbox { display:none; }
+#searchbox { display: none; }
 #searchbox.show { display:block; }
 #searchbox input {
     background: none repeat scroll 0 0 black;
@@ -371,7 +371,7 @@ body {
     width: 95%;
 }
 #playlistAddControls {
-    display:none;
+    display: none;
 }
 #playlistAddControls .note {
     color: white;
@@ -388,9 +388,7 @@ body {
     border: 1px solid white;
     color: white;
 }
-#playlistAddControls .import{
-    display:none;
-}
+
 form .submit {
     background: black;
     border: 1px solid white;

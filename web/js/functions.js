@@ -6,7 +6,6 @@ const Videosources = [
 	/*
 	Each source follows following format
 		name,
-		format ('' -> 1st matchgroup, 'url' if )
 		whole (false -> use 1st matchgroup, true -> url),
 		regex,
 		title (optional) 
@@ -17,18 +16,18 @@ const Videosources = [
 	*/
 
 	//youtube
-	['yt', false, /youtube\.com\/watch.*?[&?]v=([a-zA-Z0-9_-]{11})/g],
-	['yt', false, /youtu\.be\/([a-zA-Z0-9_-]{11})/],
-	['yt', false, /i\.ytimg\.com\/an_webp\/([a-zA-Z0-9_-]{11})\//g],
+	['yt', false, /youtube\.com\/watch.*?[&?]v=([\w-]{11})/g],
+	['yt', false, /youtu\.be\/([\w-]{11})/],
+	['yt', false, /i\.ytimg\.com\/an_webp\/([\w-]{11})\//g],
 	
 	//dailymotion
-	['dm', false, /dailymotion.com\/(?:embed\/)?video\/([a-zA-Z0-9]+)/g],
-	['dm', false, /dai.ly\/([a-zA-Z0-9]+)/g],
+	['dm', false, /dailymotion.com\/(?:embed\/)?video\/([\w]+)/g],
+	['dm', false, /dai.ly\/([\w]+)/g],
 	
 	//twitch
-	['twitchclip', false, /clips\.twitch\.tv\/([A-Za-z0-9-]+)/],
-	['twitchclip', false, /twitch\.tv\/[A-Za-z0-9]+\/clip\/([A-Za-z0-9-]+)/g],
-	['twitch', false, /twitch\.tv\/((?:videos\/)?[A-Za-z0-9-]+)/g],
+	['twitchclip', false, /clips\.twitch\.tv\/([\w-]+)/],
+	['twitchclip', false, /twitch\.tv\/[\w]+\/clip\/([\w-]+)/g],
+	['twitch', false, /twitch\.tv\/((?:videos\/)?[\w-]+)/g],
 
 	//vimeo
 	['vimeo', false, /vimeo.com\/([^&]+)/g],
@@ -591,6 +590,8 @@ function showCssOverrideWindow() {
 		center: true
 	});
 
+
+
 	var mainOptWrap = $('<div/>').appendTo(parent).addClass('controlWindow');
 	var warning = "Ok, so this will let you force a CSS include on everyone who connects. the source of the file can be remote, but please, please, please use the test button first, and make sure everything looks good before committing, because it could cause parts of the site to break if done badly. These changes are sent to everyone IMMEDIATELY.";
 	$('<p>').appendTo(mainOptWrap).text(warning).css("width", "500px");
@@ -639,8 +640,9 @@ function showCustomSqueesWindow() {
 		var newList = [];
 		nameZone.children().each(function (index, element) {
 			var input = $(element).find('input');
-			var validationRegex = (TYPE >= 1 ? /^[a-zA-Z0-9_+*?. ]+$/ : /^[a-zA-Z0-9_]+$/);
-			if (input.val().match(validationRegex) != null) {
+			var validationRegex = (TYPE >= 1 ? /^[\w+*?. ]+$/ : /^[\w]+$/);
+			
+			if (validationRegex.test(input.val())) {
 				newList.push(input.val());
 				input.css('background-color', '#FFFFFF');
 			}
@@ -1064,28 +1066,7 @@ function handleACL() {
 		body.classList.toggle('berry', LEADER);
 
 		if (isRegisteredUser()) {
-			const me = document.querySelector('#headbar .rememberMe');
-			const headbar = me?.closest('#headbar');
-			// If it doesn't exist we're a cached login.
-			// If it exists but is unchecked clear our local storage
-			// If it exists and is checked, cache login credentials.
-			if (me) {
-				if (me.checked) {
-					var data = $(headbar).data('loginData');
-					if (typeof localStorage != 'undefined' && data) {
-						localStorage.setItem('nick', data.nick);
-						localStorage.setItem('pass', data.pass);
-					}
-				}
-				else {
-					if (typeof localStorage != 'undefined') {
-						localStorage.removeItem('nick');
-						localStorage.removeItem('pass');
-					}
-				}
-			}
-			
-
+			const headbar = document.querySelector('#headbar');
 			headbar.replaceChildren();
 			initLogoutForm($(headbar));
 		}
@@ -1108,13 +1089,14 @@ function handleACL() {
 			const canQueue = controlsPlaylist();
 			const playlist = controls[0].parentNode.querySelector('ul');
 
-
 			controls[0].style.display = canQueue ? 'block' : 'none';
 			Sortable.get(playlist).option('disabled', !canQueue);
 
 			if (canQueue) {
-				for (const node of playlist.childNodes) {
-					addVideoEntryControls(node);
+				if (!playlist.querySelector('.delete')) {
+					for (const node of playlist.childNodes) {
+						addVideoEntryControls(node);
+					}
 				}
 			} else {
 				playlist.querySelectorAll('.requeue, .delete').forEach(node => node.remove());
@@ -1497,11 +1479,6 @@ function addChatMsg(data, _to) {
 			}
 		}
 
-		console.warn(
-			message,
-			data
-		)
-
 		if (isSquee && ['act', 'sweetiebot', 'rcv', false].includes(data.msg.emote)) {
 			wrap.classList.add("highlight");
 			doSqueeNotify();
@@ -1703,7 +1680,7 @@ function addNewMailMessage(nick, msg) {
 	}
 }
 function plSearch(term) {
-	if (typeof term == "undefined" || term.match(/^$/) || term.length < 3) {
+	if (typeof term == "undefined" || /^$/.test(term) || term.length < 3) {
 		$("#playlist").removeClass("searching");
 		$("#plul li").removeClass("search-hidden");
 		$("#plul li.history").remove();
@@ -2062,6 +2039,8 @@ function addVideo(data, queue, sanityid) {
 		return;
 	}
 
+
+
 	const entry = createPlaylistItem(data);
 	const dom = document.querySelector('#playlist ul');
 	
@@ -2100,6 +2079,22 @@ function attachAreaEdit(elem, name) {
 	if (!canSetAreas()) {
 		return;
 	}
+
+	/*
+	const button = createElement('button', {text: 'Edit', class: 'editBtn'});
+
+	button.addEventListener('hover', () => {
+		elem[0].classList.toggle('edit-hover')
+	});
+
+	button.addEventListener('click', () => {
+
+	})
+
+	elem[0].insertAfter(
+		button
+	)
+	*/
 
 	var orig = $(elem);
 	var editbtn = $('<button>Edit</button>').addClass("editBtn").insertAfter(orig);
@@ -2146,16 +2141,8 @@ function attachAreaEdit(elem, name) {
 
 	});
 }
-function setVidVolatile(pos, isVolat) {
-	const video = PLAYLIST.at(pos);
 
-	video.volat = isVolat;
-	video.domobj[0].classList.toggle('volatile', isVolat);
-}
-function setVidColorTag(pos, tag, volat) {
-	_setVidColorTag(PLAYLIST.at(pos).domobj[0], tag, volat);
-}
-function _setVidColorTag(domobj, tag, volat) {
+function setVidColorTag(domobj, tag, volat) {
 	var ct = domobj.querySelector(".colorTag");
 
 	if (!ct) {
@@ -2289,7 +2276,7 @@ async function parseVideoURLAsync(url) {
 		const match = Videosources.find(reg => reg[2].test(url));
 
 		if (!match) {
-			return rej(new Error("Uknown or unsupported videolink"))
+			return rej(new Error("Unknown or unsupported source or format"))
 		}
 	
 		const [source, whole, regex, title] = match;
@@ -2306,44 +2293,6 @@ async function parseVideoURLAsync(url) {
 	})
 }	
 
-/* Utilities */
-function parseVideoURL(url, callback) {
-	console.log(url);
-
-	/*
-	const match = Sources.find(source => source.regex.test(url));
-
-	if (!match) {
-		dbg("Uknown or unsupported videolink");
-		return;
-	}
-
-	
-	*/
-	var m = url.match(new RegExp("youtube\\.com/watch.*?[&?]v=([a-zA-Z0-9_-]{11})")); if (m) { callback(m[1], "yt"); return; }
-	var m = url.match(new RegExp("youtu\\.be/([a-zA-Z0-9_-]{11})")); if (m) { callback(m[1], "yt"); return; }
-	var m = url.match(new RegExp("i\\.ytimg\\.com/an_webp/([a-zA-Z0-9_-]{11})/")); if (m) { callback(m[1], "yt"); return; }
-	var m = url.match(new RegExp("dailymotion.com/(?:embed/)?video/([a-zA-Z0-9]+)")); if (m) { callback(m[1], "dm"); return; }
-	var m = url.match(new RegExp("dai.ly/([a-zA-Z0-9]+)")); if (m) { callback(m[1], "dm"); return; }
-	var m = url.match(new RegExp("clips\\.twitch\\.tv/([A-Za-z0-9-]+)")); if (m) { callback(m[1], "twitchclip", m[1]); return; }
-	var m = url.match(new RegExp("twitch\\.tv/[A-Za-z0-9]+/clip/([A-Za-z0-9-]+)")); if (m) { callback(m[1], "twitchclip", m[1]); return; }
-	var m = url.match(new RegExp("twitch\\.tv/((?:videos/)?[A-Za-z0-9]+)")); if (m) { callback(m[1], "twitch", m[1]); return; }
-	var m = url.match(new RegExp("^rtmp://")); if (m) { callback(url, "osmf", "~ Raw Livestream ~"); return; }
-	var m = url.match(new RegExp("\\.f4m$")); if (m) { callback(url, "osmf", "~ Raw Livestream ~"); return; }
-	var m = url.match(new RegExp("vimeo.com/([^&]+)")); if (m) { callback(m[1], "vimeo"); return; }
-	var m = url.match(new RegExp("(https?://soundcloud.com/[^/]+/[^/?]+)")); if (m) { callback(m[1], "soundcloud"); return; }
-	var m = url.match(new RegExp("(?:videodelivery\\.net|cloudflarestream\\.com)/([a-z0-9]+)")); if (m) { callback(m[1], "cloudflare", "~ Raw Livestream ~"); return; }
-	
-	var m = url.match(new RegExp("v\\.redd\\.it/([^/]+)")); if (m) {callback(`https://v.redd.it/${m[1]}/DASHPlaylist.mpd`, "reddit", "~ Reddit Video ~"); return; }
-	var m = url.match(new RegExp("\\.reddit\\.com/")); if (m) {callback(url, "reddit", "~ Reddit Video ~"); return; }
-
-	var m = url.match(new RegExp("\\.mpd")); if (m) { callback(url, "dash"); return; }
-	var m = url.match(new RegExp("\\.m3u8$")); if (m) { callback(url, "hls", "~ Raw Livestream ~"); return; }
-	var m = url.match(new RegExp("\\.json[^\\/]*$")); if (m) { callback(url, "manifest"); return; }
-	var m = url.match(new RegExp("\\.(?:mp4|m4v|webm|mov)?[^\\/]*$")); if (m) { callback(url, "file"); return; }
-	// ppshrug
-	callback(url, "yt");
-}
 function formatChatMsg(msg, greentext) {
 	msg = msg.replace(/(http[s]{0,1}:\/\/[^ ]*)/ig, '<a href="$&">$&</a>');
 	
@@ -2408,6 +2357,9 @@ function tabComplete(elem) {
 			elem.val(sanitize(result[0].nick));
 		}
 		else if (result.length > 1) {
+			elem[0].tabcycle = result.map((usr) => sanitize(usr.nick));
+			elem[0].tabindex = 0;
+
 			elem.data('tabcycle', result.map((usr) => sanitize(usr.nick)));
 			elem.data('tabindex', 0);
 
@@ -2416,6 +2368,9 @@ function tabComplete(elem) {
 	}
 
 	if (hasTabOptions) {
+		elem[0].value = tabOptions[elem[0].tabindex];
+		elem[0].tabindex = (elem[0].tabindex + 1) % tabOptions.length;
+
 		const index = elem.data('tabindex');
 
 		elem.val(tabOptions[index]);
@@ -2423,10 +2378,10 @@ function tabComplete(elem) {
 	}
 }
 function revertLoaders() {
-	$('.loading').each(function (key, elem) {
-		$(elem).text($(elem).data('revertTxt'));
-		$(elem).removeClass('loading');
-	});
+	for (const loader of document.querySelectorAll('.loading')) {
+		loader.textContent = $(loader).data('revertTxt');
+		loader.classList.remove('loading')
+	}
 }
 function highlight(elem) {
 	elem.classList.add('highlight');
@@ -2447,7 +2402,6 @@ function scrollToPlEntry(index) {
 function smartRefreshScrollbar() {}
 
 function setPlaylistPosition(to, scroll = false) {
-	console.trace('aaaa')
 	if (ACTIVE.domobj) {
 		ACTIVE.domobj[0].classList.remove("active");
 	}
@@ -2466,6 +2420,12 @@ function setPlaylistPosition(to, scroll = false) {
 
 function showChat(channel) {
 	ACTIVE_CHAT = channel;
+
+	/*
+	document.body.setAttribute(
+		'channel', channel
+	);
+	*/
 
 	$('.chatbuffer').addClass('inactive');
 	$('#chattabs .tab').removeClass('active');
@@ -2547,58 +2507,32 @@ function notifyNewMsg(channel, isSquee, isRcv) {
 }
 
 function sortPlaylist(data) {
-	setVal("sorting", true);
-	var elem = PLAYLIST.first;
-	var fromelem, toelem;
-
-	/*
 	const [from, to] = PLAYLIST.multiple([data.from, data.to]);
 
-	if (data.to > data.from) {
-		
-	}
-	*/
-
-	for (var i = 0; i < PLAYLIST.length; i++) {
-		if (i == data.from) {
-			fromelem = elem;
-			break;
-		}
-		elem = elem.next;
-	}
-	// Sanity check
-	if (fromelem.videoid != data.sanityid) {
+	if (from.videoid != data.sanityid) {
 		// DOOR STUCK
-		setVal("sorting", false);
-		socket.emit("refreshMyPlaylist");
+		return socket.emit("refreshMyPlaylist");
 	}
-	else {
-		elem = PLAYLIST.first;
-		for (var i = 0; i < PLAYLIST.length; i++) {
-			if (i == data.to) {
-				toelem = elem;
-				break;
-			}
-			elem = elem.next;
-		}
 
-		PLAYLIST.remove(fromelem);
-		if (data.to > data.from) {
-			PLAYLIST.insertAfter(toelem, fromelem);
-			fromelem.domobj.hide("blind", function () {
-				fromelem.domobj.insertAfter(toelem.domobj).show("blind", function () {
-					setVal("sorting", false);
-				});
-			});
-		} else {
-			PLAYLIST.insertBefore(toelem, fromelem);
-			fromelem.domobj.hide("blind", function () {
-				fromelem.domobj.insertBefore(toelem.domobj).show("blind", function () {
-					setVal("sorting", false);
-				});
-			});
-		}
+	setVal("sorting", true);
+
+	PLAYLIST.remove(from);
+
+	if (data.to > data.from) {
+		PLAYLIST.insertAfter(to, from);
+	} else {
+		PLAYLIST.insertBefore(to, from);
 	}
+
+	from.domobj.hide("blind", function () {
+		if (data.to > data.from) {
+			from.domobj.insertAfter(to.domobj).show("blind");
+		} else {
+			from.domobj.insertBefore(to.domobj).show("blind");
+		}
+	});
+
+	setVal("sorting", false);
 }
 
 function filterAdminLog() {

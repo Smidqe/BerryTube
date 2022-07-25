@@ -42,8 +42,6 @@ exports.DatabaseService = class extends ServiceBase {
 	}
 
 	query(queryParts, ...params) {
-
-		
 		return new Promise((res, rej) => {
 			const sql = queryParts.join(" ? ");
 			this.log.info(events.EVENT_DB_QUERY, '{sql}. {params}', { sql, params });
@@ -54,10 +52,12 @@ exports.DatabaseService = class extends ServiceBase {
 					return;
 				}
 
-				this.log.info(events.EVENT_DB_QUERY, '{result}', { result: JSON.stringify(result) });
-
 				res({ result, fields });
 			});
 		});
+	}
+
+	upsert(table, values) {
+		
 	}
 };

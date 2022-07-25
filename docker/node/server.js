@@ -53,6 +53,10 @@ const services = [databaseService, authService, pollService, sessionService];
 var fs = require('fs');
 const bcrypt = require('bcrypt');
 const { randomUUID } = require("crypto");
+const regexes = {
+	htmlBlacklist: /<[ ]*(script|frame|style|marquee|blink)[ ]*([^>]*)>/gi,
+
+}
 
 process.on("uncaughtException", function (err) {
 	console.error(`Uncaught ${err.code}: ${err.message}`);
@@ -84,7 +88,6 @@ process.stdin.on('data', function (chunk) {
 });
 
 services.forEach(s => s.init());
-const mysql = databaseService.connection;
 
 // Add new feature to socket.io, for granular broadcasts and such
 // This is probably the best solution to sending packets to all people matching x criteria easily.
@@ -221,9 +224,9 @@ LinkedList.Circular.prototype.each = function(cb) {
 SERVER.PLAYLIST = new LinkedList.Circular();
 SERVER.ACTIVE = null;
 SERVER.LIVE_MODE = false;
-SERVER.AREAS = [];
+SERVER.AREAS = new Map();
 SERVER.STATE = 1;
-SERVER.TIME = 0 - SERVER.settings.vc.head_time; // referring to time
+SERVER.TIME = -SERVER.settings.vc.head_time; // referring to time
 SERVER._TIME = 0; // Previous tick time.
 SERVER.OUTBUFFER = {};
 SERVER.BANS = [];
@@ -266,21 +269,21 @@ DefaultLog.addLogger(
 		sessionService.forCan(actions.CAN_SEE_ADMIN_LOG, session => session.emit("adminLog", adminMessage));
 	});
 
-function initPlaylist(callback) {
-	var sql = `select * from ${SERVER.dbcon.video_table} order by position`;
-	mysql.query(sql, function (err, result) {
-		if (err) {
-			DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-			return;
-		}
+async function initPlaylist(callback) {
+	const {result} = await databaseService.query`
+		SELECT 
+			* 
+		FROM 
+			videos 
+		ORDER BY position
+	`;
 
-		for (const row of result) {
-			SERVER.PLAYLIST.append(new Video(row));
-		}
-		
-		SERVER.ACTIVE = SERVER.PLAYLIST.first;
-		if (callback) { callback(); }
-	});
+	for (const video of result) {
+		SERVER.PLAYLIST.append(new Video(video));
+	}
+
+	SERVER.ACTIVE = SERVER.PLAYLIST.first;
+	if (callback) { callback(); }
 }
 function initResumePosition(callback) {
 	getMisc({ name: 'server_active_videoid' }, function (old_videoid) {
@@ -300,13 +303,14 @@ function initResumePosition(callback) {
 		if (callback) { callback(); }
 	});
 }
-function upsertMisc(data, callback) {
-	var sql = `insert into misc (name,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value = ?`;
-	mysql.query(sql, [data.name, data.value, data.value], function (err) {
-		if (err) { DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err); }
-
-		if (callback) { callback(); }
-	});
+async function upsertMisc(data, callback) {
+	databaseService.query`
+		insert into
+			misc (name, value)
+		VALUES
+			(${data.name}, ${data.value})
+		ON DUPLICATE KEY UPDATE value = ${data.value}	
+	`.then(callback);
 }
 async function getMisc(data, callback) {
 	const {result} = await databaseService.query`
@@ -339,6 +343,7 @@ function initHardbant(callback) {
 function initShadowbant(callback) {
 	getMisc({ name: "shadowbant_ips" }, function (ips) {
 		if (ips) {
+			
 			var shadowbant = JSON.parse(ips) || [];
 			for (var i = 0; i < shadowbant.length; ++i) {
 				var data = shadowbant[i];
@@ -365,10 +370,12 @@ function initFilters(callback) {
 		if (callback) { callback(); }
 	});
 }
+
 function initTimer() {
 	SERVER._TIME = new Date().getTime();
+
 	setInterval(function () {
-		if (SERVER.ACTIVE == null) {
+		if (!SERVER.ACTIVE) {
 			return;
 		}
 
@@ -381,6 +388,8 @@ function initTimer() {
 			service.onTick(elapsedMilliseconds);
 		}
 
+		
+
 		if (Math.ceil(SERVER.TIME + 1) >= (SERVER.ACTIVE.duration() + SERVER.settings.vc.tail_time)) {
 			playNext();
 		} else if (SERVER.STATE != 2) {
@@ -390,7 +399,10 @@ function initTimer() {
 				resetTime();
 			}
 		}
+
+
 	}, 1000);
+
 
 	setInterval(function () {
 		if (isTrackingTime()) {
@@ -403,29 +415,27 @@ function initTimer() {
 		}
 	}, SERVER.settings.core.heartbeat_interval);
 }
-function initAreas() {
-	var sql = 'select * from areas';
-	mysql.query(sql, function (err, result) {
-		if (err) {
-			DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-			return;
-		}
-		else {
-			for (var i in result) {
-				var row = result[i];
-				var newArea = {
-					name: row.name,
-					html: row.html
-				};
-				SERVER.AREAS.push(newArea);
-			}
-		}
-	});
+async function initAreas() {
+	const {result} = await databaseService.query`
+		select * from areas
+	`;
+
+	for (const area of result) {
+		SERVER.AREAS.set(area.name, area.html);
+	}
 }
-function sendAreas(socket) {
-	socket.emit("setAreas", SERVER.AREAS);
+async function sendAreas(socket) {
+	const areas = [];
+
+	for (const [name, html] of SERVER.AREAS) {
+		areas.push({name, html})
+	}
+
+	socket.emit("setAreas", areas);
 }
 function removeBlacklistedHTML(content) {
+	const a = /<[ ]*(script|frame|style|marquee|blink)[ ]*([^>]*)>/gi;
+
 	var blacklist = ['script', 'frame', 'style', 'marquee', 'blink'];
 	for (var i in blacklist) {
 		var re = RegExp("<(/*[ ]*" + blacklist[i] + "[ ]*)([^>]*)>", 'gi');
@@ -434,24 +444,20 @@ function removeBlacklistedHTML(content) {
 	return content;
 }
 /* Grumble, the regex above makes my syntax highlighter lose its mind. Putting this here to end the madness. */
-function setAreas(areaname, content) {
+async function setAreas(areaname, content) {
+
 	// Just for the 8-year olds
 	content = removeBlacklistedHTML(content);
-	for (var i in SERVER.AREAS) {
-		if (SERVER.AREAS[i].name == areaname) {
-			SERVER.AREAS[i].html = content;
-			sendAreas(io.sockets);
-			return;
-		}
-	}
-	var newArea = {
-		name: areaname,
-		html: content
-	};
 
+	SERVER.AREAS.set(areaname, content);
 
+	await databaseService.query`
+		INSERT INTO areas (name, html)
+		VALUES (${areaname}, ${content})
+		ON DUPLICATE KEY
+		UPDATE html = ${content}
+	`;
 
-	SERVER.AREAS.push(newArea);
 	sendAreas(io.sockets);
 }
 function sendStatus(name, target) {
@@ -490,6 +496,10 @@ function playNext() {
 }
 function prepareBans() {
 	const now = new Date().getTime();
+	
+	if (!SERVER.BANS) {
+		return;
+	}
 
 	SERVER.BANS = SERVER.BANS.filter(ban => {
 		if (ban.duration === -1) {
@@ -576,29 +586,11 @@ function kickUserByNick(socket, nick, reason) {
 	sessionService.forNick(nick, session => session.kick(reason, getSocketName(socket)));
 }
 var commit = function () {
-	var elem = SERVER.PLAYLIST.first;
-	for (var i = 0; i < SERVER.PLAYLIST.length; i++) {
-		var sql = `update ${SERVER.dbcon.video_table} set position = ? where videoid = ?`;
-		mysql.query(sql, [i, '' + elem.id()], function (err) {
-			if (err) {
-				DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-				return;
-			}
-		});
-		elem = elem.next;
-	}
-
-	for (var i = 0; i < SERVER.AREAS.length; i++) {
-		var sql = 'update areas set html = ? where name = ?';
-		mysql.query(sql, [SERVER.AREAS[i].html, SERVER.AREAS[i].name], function (err) {
-			if (err) {
-				DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-				return;
-			}
-		});
-	}
-
-	upsertMisc({ name: 'filters', value: JSON.stringify(SERVER.FILTERS) });
+	SERVER.PLAYLIST.each((video, index) => {
+		databaseService.query`
+			update videos set position = ${index} where videoid = ${video.id()}
+		`;
+	});
 
 	const shadowbant = Object.values(sessionService.ipAddresses)
 		.reduce((acc, entry) => {
@@ -682,25 +674,22 @@ function resetDrinks() {
 function resetTime() {
 	SERVER.TIME = -SERVER.settings.vc.head_time;
 }
-function addDrink(amount, socket, callback) {
+function addDrink(amount, socket) {
 	SERVER.DRINKS += parseFloat(amount);
 
 	if (isDrinkAmountExcessive(SERVER.DRINKS)) {
 		kickForIllegalActivity(socket, "Berry Punch is mad at you");
 	}
 
-	if (callback) {
-		callback();
-	}
+	sendDrinks(io.sockets);
 }
-function randomPoni() {
-	return SERVER.ponts[Math.floor(Math.random() * SERVER.ponts.length)];
-}
-function sendFilters(socket) {
-	socket.emit("recvFilters", SERVER.FILTERS);
+
+function validateFilter(filter) {
+
 }
 function applyFilters(nick, msg, socket) {
 	var actionChain = [];
+	const filterCount = SERVER.FILTERS.length;
 	const flags = {
 		sendToSelf: undefined,
 		sendToUsers: undefined,
@@ -727,8 +716,8 @@ function applyFilters(nick, msg, socket) {
 				continue;
 			}
 
-			if (nick.match(nickCheck)) {
-				if (msg.match(chatCheck)) {
+			if (nickCheck.test(nick)) {
+				if (chatCheck.test(msg)) {
 					// Perform Action
 					actionChain.push({ action: d.actionSelector, meta: d.actionMetadata });
 				}
@@ -762,13 +751,20 @@ function applyFilters(nick, msg, socket) {
 		DefaultLog.error(events.EVENT_ADMIN_APPLY_FILTERS, "could not apply filters to chat message", {}, e);
 	}
 
+	//some filters were faulty, remove from database too
+	if (SERVER.FILTERS.length !== filterCount) {
+		upsertMisc({ name: 'filters', value: JSON.stringify(SERVER.FILTERS) });
+	}
+
 	return { message: msg, flags };
 }
 function applyPluginFilters(msg, socket) {
 	if (getToggleable("bestponi")) {
 		//handle best pony.
-		var re = new RegExp('^[a-zA-Z ]+is bes([st]) pon([tiye])(.*)', 'i');
-		msg = msg.replace(re, randomPoni() + ' is bes$1 pon$2$3');
+		const re = new RegExp('^[a-zA-Z ]+is bes([st]) pon([tiye])(.*)', 'i');
+		const poni = SERVER.ponts[Math.floor(Math.random() * SERVER.ponts.length)];
+
+		msg = msg.replace(re, poni + ' is bes$1 pon$2$3');
 	}
 
 	if (getToggleable("wobniar")) {
@@ -789,7 +785,7 @@ function setVideoVolatile(socket, video, isVolat) {
 		"{mod} set {title} to {status}",
 		{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()), status: isVolat ? "volatile" : "not volatile" });
 }
-function setVideoColorTag(socket, elem, tag, volat) {
+async function setVideoColorTag(socket, elem, tag, volat) {
 	if (!tag) {
 		elem.removeTag(false);
 	} else {
@@ -802,13 +798,14 @@ function setVideoColorTag(socket, elem, tag, volat) {
 		elem.setTag(true, false);
 	}
 
-	var sql = 'update ' + SERVER.dbcon.video_table + ' set meta = ? where videoid = ?';
-	mysql.query(sql, [JSON.stringify(elem.meta), '' + elem.id()], function (err) {
-		if (err) {
-			DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-			return;
-		}
-	});
+	await databaseService.query`
+		UPDATE
+			videos
+		SET
+			meta = ${JSON.stringify(elem.meta)}
+		WHERE
+			videoid = ${elem.id()}
+	`;
 }
 
 function banUser(data, mod = undefined) {
@@ -912,9 +909,7 @@ const chatCommandMap = {
 		messageData.emote = "drink";
 
 		if (messageData.metadata.channel === "main") {
-			addDrink(parsed.multi, socket, () => {
-				sendDrinks(io.sockets);
-			});
+			addDrink(parsed.multi, socket);
 		}
 
 		return doNormalChatMessage;
@@ -1205,25 +1200,18 @@ function sendToggleables(socket) {
 	socket.emit("setToggleables", data);
 }
 
-function saveToHistory(node) {
-	const historyQuery = "insert into videos_history (videoid, videotitle, videolength, videotype, date_added, meta) values (?,?,?,?,NOW(),?)";
-	const historyQueryParams = [
-		String(node.videoid),
-		node.videotitle,
-		node.videolength,
-		node.videotype,
-		JSON.stringify(node.meta || {})
-	];
+async function saveToHistory(video) {
+	if (video.duration() === 0) {
+		return;
+	}
 
-	mysql.query(historyQuery, historyQueryParams, function (err) {
-		if (err) {
-			DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql: historyQuery }, err);
-			return;
-		}
-	});
+	await databaseService.query`
+		insert into videos_history (videoid, videotitle, videolength, videotype, date_added, meta) 
+		values (${video.id()},${video.title()},${video.duration()},${video.source()},NOW(),${JSON.stringify(video.meta)})
+	`;
 }
 
-function delVideo(video, sanity, socket) {
+async function delVideo(video, position, sanity, socket) {
 	if (video.deleted) {
 		return;
 	}
@@ -1232,45 +1220,32 @@ function delVideo(video, sanity, socket) {
 		return doorStuck(socket);
 	}
 
-	try {
-		SERVER.PLAYLIST.remove(video);
-		
-		io.sockets.emit('delVideo', {
-			position,
-			sanityid: video.id()
-		});
-		
-		const query = `delete from ${SERVER.dbcon.video_table} where videoid = ? limit 1`;
-
-		mysql.query(query, [String(video.id())], function (err) {
-			if (err) {
-				DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql: query }, err);
-				return;
-			}
-
-			//save to history if not a livestream
-			if (video.videolength > 0) {
-				saveToHistory(video);
-			}
+	SERVER.PLAYLIST.remove(video);
+	
+	io.sockets.emit('delVideo', {
+		position,
+		sanityid: video.id()
+	});
+	
+	await databaseService.query` delete from videos where videoid = ${video.id()} limit 1;`
+		.then(() => saveToHistory(video))
+		.catch(err => {
+			DefaultLog.error(events.EVENT_ADMIN_DELETED_VIDEO,
+				"{mod} could not delete {title}",
+				{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()) }, err);
 		});
 
-		video.deleted = true;
+	video.deleted = true;
 
-		DefaultLog.info(events.EVENT_ADMIN_DELETED_VIDEO,
-			"{mod} deleted {title}",
-			{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()) });
-
-	} catch (e) {
-		DefaultLog.error(events.EVENT_ADMIN_DELETED_VIDEO,
-			"{mod} could not delete {title}",
-			{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()) }, e);
-	}
+	DefaultLog.info(events.EVENT_ADMIN_DELETED_VIDEO,
+		"{mod} deleted {title}",
+		{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()) });
 }
 
 function isTrackingTime() {
-	if (SERVER.LIVE_MODE) { return false; }
-	return true;
+	return !SERVER.LIVE_MODE;
 }
+
 
 /* RUN ONCE INIT */
 initPlaylist(function () {
@@ -1318,14 +1293,15 @@ io.sockets.on('connection', function (ioSocket) {
 		socket.socket.join("admin");
 		sendToggleables(socket);
 
-		for (var i in SERVER.OUTBUFFER["admin"]) {
-			emitChat(socket, SERVER.OUTBUFFER["admin"][i], true);
+		for (const message of SERVER.OUTBUFFER["admin"] || []) {
+			emitChat(socket, message, true);
 		}
 
-		for (var i in SERVER.OUTBUFFER["adminLog"]) {
-			var data = SERVER.OUTBUFFER["adminLog"][i];
-			data.ghost = true;
-			socket.emit("adminLog", data);
+		for (const logMessage of SERVER.OUTBUFFER["adminLog"] || []) {
+			socket.emit("adminLog", {
+				...logMessage,
+				ghost: true,
+			});
 		}
 	});
 
@@ -1363,6 +1339,8 @@ io.sockets.on('connection', function (ioSocket) {
 		//validate and complain if necessary
 
 		SERVER.FILTERS = data;
+
+		upsertMisc({ name: 'filters', value: JSON.stringify(SERVER.FILTERS) });
 	});
 	socket.on("searchHistory", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_SEARCH_HISTORY)) {
@@ -1395,27 +1373,25 @@ io.sockets.on('connection', function (ioSocket) {
 				};
 			}));
 	});
-	socket.on("delVideoHistory", function (data) {
+	socket.on("delVideoHistory", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_DELETE_HISTORY)) {
 			return;
 		}
 
 		const logData = { mod: getSocketName(socket), type: "playlist", id: data.videoid };
 
-		if (!data.videoid.match(/^[a-zA-Z0-9_ \-#]{3,50}$/)) {
+		if (!data.videoid.match(/^[\w \-#]{3,50}$/)) {
 			DefaultLog.error(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} could not delete history for invalid id {id}", logData);
 			return;
 		}
 
-		var sql = 'delete from videos_history where videoid = ? limit 1';
-		mysql.query(sql, [data.videoid], function (err) {
-			if (err) {
-				DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-				DefaultLog.error(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} could not delete history for invalid id {id}", logData, err);
-			} else {
-				DefaultLog.info(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} deleted history for id {id}", logData, err);
-			}
-		});
+		await databaseService.query`
+			delete from videos_history where videoid = ${data.videoid} limit 1
+		`
+			.then(() => {
+				DefaultLog.info(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} deleted history for id {id}", logData);
+			})
+			.catch((err) => DefaultLog.error(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} could not delete history for invalid id {id}", logData, err));
 	});
 	socket.on("randomizeList", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_RANDOMIZE_LIST)) {
@@ -1450,7 +1426,7 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
-		sendFilters(socket);
+		socket.emit("recvFilters", SERVER.FILTERS);
 	});
 	socket.on('setToggleable', function (data) {
 		if (!authService.can(socket.session, actions.ACTION_SET_TOGGLEABLS)) {
@@ -1498,7 +1474,7 @@ io.sockets.on('connection', function (ioSocket) {
 		}
 		
 		if (type < userTypes.ANONYMOUS || nick === '[no username]') { 
-			throw kick("Your session is broken, most likely network related. Refresh"); 
+			throw kick("Your session is broken, most likely network related. Refresh."); 
 		}
 
 		const { metadata: metaAttempt, msg } = data;
@@ -1528,14 +1504,25 @@ io.sockets.on('connection', function (ioSocket) {
 		}
 	});
 
-	socket.on("registerNick", function (data) {
+	socket.on("registerNick", async function (data) {
 		const logData = { ip: socket.ip, nick: data.nick };
 
 		var i = SERVER.RECENTLY_REGISTERED.length;
 		var ip = socket.ip;
+
+		
 		if (!ip) { return false; }
+
+
 		var now = new Date();
 		// Backwards to splice on the go
+
+		/*
+		if (ip !== "172.20.0.1") {
+			
+		}
+		*/
+
 		const isLocalIp = ip == "172.20.0.1";
 		if (!isLocalIp) {
 			while (--i >= 0) {
@@ -1548,68 +1535,47 @@ io.sockets.on('connection', function (ioSocket) {
 				}
 			}
 		}
-		if (!data.pass || data.pass.length <= 5) {
-			onRegisterError("Invalid password. Must be at least 6 characters long.");
-			return;
-		}
-		if (data.pass != data.pass2) {
-			onRegisterError("Passwords do not match.");
-			return;
-		}
-		if (!data.nick || data.nick.length <= 0 || data.nick.length > 15) {
-			onRegisterError("Username must be under 15 characters.");
-			return;
-		}
-		if (!data.nick.match(/^[0-9a-zA-Z_]+$/ig)) {
-			onRegisterError("Username must contain only letters, numbers and underscores.");
-			return;
-		}
-		if (!getToggleable("allowreg")) {
-			onRegisterError("Registrations are currently Closed. Sorry for the inconvenience!");
-			return;
-		}
-		if (SERVER.nick_blacklist.has(data.nick.toLowerCase())) {
-			onRegisterError("Username not available.");
-			return;
+
+		const conditions = [
+			[() => !getToggleable("allowreg"), "Registrations are currently Closed. Sorry for the inconvenience!"],
+			[(data) => !data.nick, "No username inserted"],
+			[(data) => !data.pass, "No password inserted"],
+			[(data) => !/^[\w]+$/ig.test(data.nick), "Username must contain only letters, numbers and underscores."]
+			[(data) => SERVER.nick_blacklist.has(data.nick.toLowerCase()), "Username not available."],
+			[(data) => data.nick.length > 15, "Username must be under 15 characters."],
+			[(data) => data.pass.length <= 5, "Password must be 6 or more characters."],
+			[(data) => data.pass !== data.pass2, "Passwords do not match."],
+		];
+
+		for (const [fail, message] of conditions) {
+			if (fail(data)) {
+				DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}", logData, message);
+				socket.emit("loginError", { message });
+			}
 		}
 
-		var sql = 'select * from users where name like ?';
-		mysql.query(sql, [data.nick], function (err, result, fields) {
+		const {result} = await databaseService.query`
+			select * from users where name like ${data.nick}
+		`;
+
+		//user
+		if (result.length >= 1) {
+			return sessionService.login(socket, data);
+		}
+
+		bcrypt.hash(data.pass, SERVER.settings.core.bcrypt_rounds, function (err, hash) {
 			if (err) {
-				DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql: q }, err);
+				DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}", logData, err);
+				DefaultLog.error(events.EVENT_GENERAL, "Failed to bcrypt for {nick}'s password", { nick: data.nick }, err);
 				return;
 			}
 
-			if (result.length >= 1) {
-				// Already registered, try logging in using the password we have.
-				return sessionService.login(socket, data);
-			}
-			else {
-				bcrypt.hash(data.pass, SERVER.settings.core.bcrypt_rounds, function (err, hash) {
-					if (err) {
-						DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}", logData, err);
-						DefaultLog.error(events.EVENT_GENERAL, "Failed to bcrypt for {nick}'s password", { nick: data.nick }, err);
-						return;
-					}
-					var sql = 'INSERT INTO users (name, pass, type) VALUES (?,?,?)';
-					mysql.query(sql, [data.nick, hash, 0], function (err, result, fields) {
-						if (err) {
-							DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}", logData, err);
-							DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-							return;
-						}
-
-						// Registered, log em in.
-						return sessionService.login(socket, data);
-					});
-				});
-			}
+			databaseService.query`
+				insert into users (name, pass, type)
+				values (${data.nick}, ${hash}, ${0})
+			`.then(() => sessionService.login(socket, data))
+			.catch((err) => DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}", logData, err));
 		});
-
-		function onRegisterError(err) {
-			DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}", logData, err);
-			socket.emit("loginError", { message: err });
-		}
 	});
 	socket.on("changePassword", function (data) {
 		const nick = socket.session.nick;
@@ -1633,17 +1599,12 @@ io.sockets.on('connection', function (ioSocket) {
 				return;
 			}
 
-			const sql = "UPDATE users SET pass = ? WHERE name = ?";
-			mysql.query(sql, [hash, nick], function (err) {
-				if (err) {
-					DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-					DefaultLog.error(events.EVENT_USER_CHANGED_PASSWORD, "{nick} could not change password from ip {ip}", logData, err);
-					return;
-				}
-
-				DefaultLog.info(events.EVENT_USER_CHANGED_PASSWORD, "{nick} changed password from ip {ip}", logData, err);
-				socket.emit('forceRefresh');
-			});
+			databaseService.query`
+				UPDATE users SET pass = ${hash} WHERE name = ${nick}
+			`
+				.then(() => DefaultLog.info(events.EVENT_USER_CHANGED_PASSWORD, "{nick} changed password from ip {ip}", logData))
+				.then(() => socket.emit('forceRefresh'))
+				.catch((err) => DefaultLog.error(events.EVENT_USER_CHANGED_PASSWORD, "{nick} could not change password from ip {ip}", logData, err))
 		});
 	});
 	socket.on("playNext", function (data) {
@@ -1670,6 +1631,8 @@ io.sockets.on('connection', function (ioSocket) {
 			return doorStuck(socket);
 		}
 
+		SERVER.PLAYLIST.remove(from);
+
 		if (data.to > data.from) {
 			SERVER.PLAYLIST.insertAfter(to, from)
 		} else {
@@ -1680,7 +1643,7 @@ io.sockets.on('connection', function (ioSocket) {
 
 		DefaultLog.info(events.EVENT_ADMIN_MOVED_VIDEO,
 			"{mod} moved {title}",
-			{ mod: getSocketName(socket), title: decodeURIComponent(fromelem.title()), type: "playlist" });
+			{ mod: getSocketName(socket), title: decodeURIComponent(from.title()), type: "playlist" });
 	});
 	socket.on("forceVideoChange", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
@@ -1688,6 +1651,7 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
+		const prev = SERVER.ACTIVE;
 		const target = SERVER.PLAYLIST.at(data.index);
 
 		if (!target) {
@@ -1708,8 +1672,8 @@ io.sockets.on('connection', function (ioSocket) {
 		handleNewVideoChange();
 		sendStatus("forceVideoChange", io.sockets);
 
-		if (prev.node.volat) {
-			delVideo(prev, null, socket);
+		if (prev.volatile()) {
+			delVideo(prev, data.index, null, socket);
 		} 
 	});
 	socket.on("delVideo", function (data) {
@@ -1939,6 +1903,7 @@ io.sockets.on('connection', function (ioSocket) {
 			"{mod} edited {area}",
 			{ mod: getSocketName(socket), type: "site", area: areaname });
 
+		
 		setAreas(areaname, content);
 	});
 	socket.on("fondleVideo", function (data) {
@@ -1971,52 +1936,39 @@ io.sockets.on('connection', function (ioSocket) {
 		io.sockets.emit(mappings.get(action), data);
 	});
 	socket.on("fondleUser", function (data) {
-		if ("action" in data) {
-			if (data.action == "setUserNote") {
-				var d = data.info; // Drop action name.
-				if (!authService.can(socket.session, actions.ACTION_SET_USER_NOTE)) {
-					kickForIllegalActivity(socket, "You cannot set usernote");
-					return;
-				}
+		if (!"action" in data) {
+			return;
+		}
 
-				// She wants the d.nick :3
-				if (d.nick.match(/^[0-9a-zA-Z_]+$/) != null &&
-					d.nick.length >= 1 &&
-					d.nick.length <= 20
-				) {
-					var sql = "select meta from users where name = ?";
-					mysql.query(sql, [d.nick], function (err, result, fields) {
-						if (err) {
-							DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-							return;
-						}
-						if (result.length == 1) {
-							var meta = {};
-							try {
-								if (result[0].meta) { meta = JSON.parse(result[0].meta) || {}; }
-							} catch (e) {
-								DefaultLog.error(events.EVENT_GENERAL, "Failed to parse user meta for {nick}", { nick: d.nick }, e);
-								meta = {};
-							}
-							meta.note = d.note;
-							sql = "update users set meta = ? where name = ?";
-							mysql.query(sql, [JSON.stringify(meta), d.nick], function (err, result, fields) {
-								if (err) {
-									DefaultLog.error(events.EVENT_DB_QUERY, "query \"{sql}\" failed", { sql }, err);
-									return;
-								}
+		if (data.action == "setUserNote") {
+			var d = data.info; // Drop action name.
+			if (!authService.can(socket.session, actions.ACTION_SET_USER_NOTE)) {
+				kickForIllegalActivity(socket, "You cannot set usernote");
+				return;
+			}
 
-								DefaultLog.info(events.EVENT_ADMIN_SET_NOTE,
-									"{mod} set {nick}'s note to '{note}'",
-									{ mod: getSocketName(socket), type: "user", nick: d.nick, note: d.note });
+			// She wants the d.nick :3
+			if (/^[\w]+$/.test(d.nick)) {
+				const {row} = await databaseService.query`
+					select meta from users where name = ${d.nick}
+				`;
 
-								sessionService.forNick(d.nick, s => s.updateMeta(meta));
-								sessionService.forCan(actions.CAN_SEE_PRIVILEGED_USER_DATA,
-									session => session.emit("fondleUser", data));
-							});
-						}
-					});
-				}
+				const meta = {
+					...row[0].meta,
+					note: d.note
+				};
+
+				await databaseService.query`
+					update users set meta = ${JSON.stringify(meta)} where name = ${d.nick}
+				`.then(() => {
+					DefaultLog.info(events.EVENT_ADMIN_SET_NOTE,
+						"{mod} set {nick}'s note to '{note}'",
+						{ mod: getSocketName(socket), type: "user", nick: d.nick, note: d.note });
+
+					sessionService.forNick(d.nick, s => s.updateMeta(meta));
+					sessionService.forCan(actions.CAN_SEE_PRIVILEGED_USER_DATA,
+						session => session.emit("fondleUser", data));
+				});
 			}
 		}
 	});

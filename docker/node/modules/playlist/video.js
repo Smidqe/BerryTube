@@ -44,12 +44,20 @@ exports.Video = class {
 		return this.volat;
 	}
 
+	tag(volatile) {
+		return this.meta[volatile ? 'colorTagVolat' : 'colorTag'];
+	}
+
 	setTag(color, volatile) {
 		this.meta[volatile ? 'colorTagVolat' : 'colorTag'] = color;
 	}
 
 	removeTag(volatile) {
 		delete this.meta[volatile ? 'colorTagVolat' : 'colorTag'];
+	}
+
+	hasTag() {
+		
 	}
 
 	setVolatile(volatile) {
