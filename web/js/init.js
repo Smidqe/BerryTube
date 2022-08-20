@@ -748,15 +748,20 @@ function showUserActions(who) {
 	var optWrap = $("<ul/>").attr('id', 'userOps').appendTo(cmds);
 
 	/*
+	const user = CHATLIST.get(who[0].getAttribute('nick'));
+	const me = CHATLIST.get(NAME);
 	const options = [
 		{on: canMoveBerry, op: setBerry, text: ''},
-		{on: canMoveBerry, op: removeBerry, text: ''},
+		{on: canRemoveBerry, op: removeBerry, text: ''},
 		{on: canKickUser, op: removeBerry, text: ''},
-		{on: }
-	]
+		{on: canIgnoreUser, op: ignoreUser},
+		{on: canIgnoreUser, op: unignoreUser},
+		{on: canShadowban, op: shadowBan},
+		{on: canTempShadowBan, op: tempShadowban},
+	];
 
 	for (const opt of options) {
-		if (opt.can()) {
+		if (opt.can(me, user)) {
 			const elem = createElement('li', {text: opt.text, class: 'btn'});
 			
 			optWrap[0].append(elem);
@@ -920,7 +925,8 @@ function addUser(data, sortafter, animate = false) {
 		if (data.type !== -2) {
 			CHATLIST.set(data.nick, {
 				lastMessage: 0,
-				type: typeMappings.get(data.type)
+				type: typeMappings.get(data.type),
+				dom: user
 			});
 
 			user.onclick = () => showUserActions($(user));
@@ -945,17 +951,15 @@ function updateUserAliases(ip, aliases) {
 	$('#chatlist li[ip="' + ip + '"]').data('aliases', aliases);
 }
 function updateUserNote(nick, note) {
-	if (note === undefined) {
-		note = '';
+	const user = document.querySelector(`#chatlist li[nick="${nick}"]`);
+
+	if (!user) {
+		return;
 	}
-	var elem = $(`#chatlist li[nick="${nick}"]`);
-	elem.data('note', note).attr('title', note);
-	if (note.length > 0) {
-		elem.addClass('note');
-	}
-	else {
-		elem.removeClass('note');
-	}
+
+	user.note = note ?? "";
+	user.setAttribute('title', user.note);
+	user.classList.toggle('note', user.note.length > 0)
 }
 
 function rmUser(nick) {
@@ -1112,7 +1116,7 @@ function initRCVOverlay(above) {
 }
 
 async function attemptQueue(url, volatile) {
-	await parseVideoURLAsync(url).then(info => {
+	return parseVideoURLAsync(url).then(info => {
 		let existing = PLAYLIST.find(video => video.videoid === info.id);
 
 		if (existing) {
@@ -1131,13 +1135,19 @@ async function attemptQueue(url, volatile) {
 	}).finally(revertLoaders);
 }
 
-function createPlaylistControls() {
-	const wrap = createElement('div', {id: 'playlistAddControls'})
-}
 function initPlaylistControls(plwrap) {
 	/*
 	const wrap = createElement('div', {id: 'playlistAddControls'},
-
+		createElement('div', {class: 'slideBtn', text: 'Import Video'},
+			createElement('div', {class: 'import hidden'},
+				createElement('div', {},
+					createElement('div', {class: 'note', html: 'Video or <a target="_blank" href="manifest.php">manifest</a> URL:'}),
+					createElement('div', {class: 'impele'}, {
+						createElement('input')
+					})
+				)
+			)
+		)
 	)
 	*/
 	// Add controls
@@ -1582,7 +1592,10 @@ function initChat(parent) {
 		createElement('span', {id: 'connectedCount'})
 	);
 
-	usercountWrap.onclick = toggleChatMode;
+	usercountWrap.onclick = function() {
+		this.classList.toggle('wide');
+		this.parentNode.querySelector('#chatlist').classList.toggle('hidden')
+	};
 
 	const inputbar = createElement('input', {maxlength: 400, 'aria-label': 'nickname'})
 	const input = createElement('div', {id: 'chatinput', class: 'right'}, inputbar);
@@ -1600,7 +1613,7 @@ function initChat(parent) {
 		),
 		createElement('div', {id: 'adminbuffer', class: 'chatbuffer inactive'}),
 		usercountWrap,
-		createElement('div', {id: 'chatlist'}, 
+		createElement('div', {id: 'chatlist', class: 'hidden'}, 
 			createElement('ul')
 		),
 		input,
@@ -1653,12 +1666,11 @@ function initChat(parent) {
 			return;
 		}
 
-		const data = {
+		socket.emit("setNick", {
 			nick: this.value,
 			pass: false
-		};
-
-		socket.emit("setNick", data);
+		});
+		
 		this.value = '';
 	}
 
@@ -1728,13 +1740,18 @@ function createLoginForm() {
 		[
 			{for: 'loginname', text: 'Username'}, 
 			{id: 'loginname', type: 'text', autocomplete: 'username'}, 
-			{class: 'submit register', text: 'Register'}
+			{class: 'submit register', text: 'Register'} 
 		],
 		[
 			{for: 'loginpass', text: 'Password'}, 
 			{id: 'loginpass', type: 'password', autocomplete: 'current-password'}, 
 			{class: 'submit login', text: 'Login'}
-		]
+		],
+		[
+			{for: 'regpass', text: 'Password'}, 
+			{id: 'regpass', type: 'password', autocomplete: 'new-password'}, 
+			{}
+		],
 	];
 
 	const table = createElement('table', {},
@@ -1792,14 +1809,14 @@ async function initLoginForm(headbar) {
 	const table = createLoginForm();
 	const submitter = function() {
 		const form = this.closest('form');
-
-		$('#headbar .loginError').html('');
-
-		var nick = form["loginname"].value;
-		var pass = form["loginpass"].value;
-		var pass2 = form["regpass2"]?.value;
 		
-		var data = { nick: nick, pass: pass };
+		document.querySelector('.loginError').innerHTML = '';
+		
+		const pass2 = form["regpass2"]?.value;	
+		const data = { 
+			nick: form["loginname"].value, 
+			pass: form["loginpass"].value 
+		};
 
 		if (pass2) {
 			data['pass2'] = pass2;
@@ -1841,15 +1858,6 @@ async function initLoginForm(headbar) {
 			)
 		}
 	});
-
-	if (localStorage["autologin"]) {
-		const details = JSON.parse(localStorage.getItem("autologin"));
-
-		socket.emit('setNick', {
-			nick: details.nick,
-			pass: details.pass
-		});
-	}
 }
 function initDrinkCounter() {
 	const elements = [
@@ -2344,9 +2352,11 @@ $(async function () {
 
 	const chatbuffer = document.querySelector('.chatbuffer');
 
-	chatbuffer.addEventListener('mouseenter', () => KEEP_BUFFER = false);
-	chatbuffer.addEventListener('mouseleave', () => {
-		KEEP_BUFFER = true;
+	chatbuffer.addEventListener('mouseenter', function() {
+		this.allowScroll = false;
+	});
+	chatbuffer.addEventListener('mouseleave', function() {
+		this.allowScroll = true;
 		scrollBuffersToBottom();
 	});
 
@@ -2381,4 +2391,13 @@ $(async function () {
 	setVal("INIT_FINISHED", true);
 
 	loadAllPlugins();
+
+	if (localStorage["autologin"]) {
+		const details = JSON.parse(localStorage.getItem("autologin"));
+
+		socket.emit('setNick', {
+			nick: details.nick,
+			pass: details.pass
+		});
+	}
 });

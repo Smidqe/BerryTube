@@ -39,11 +39,11 @@ body {
 #drinkWrap {
 	background:url(/images/drink_back.png) repeat-y center;
 }
-#connectedCountWrapper{
+#connectedCountWrapper {
 	cursor:pointer;
 	background:url(/images/collapse.png) no-repeat 2px center ;
 }
-#connectedCountWrapper.wide{
+.wide #connectedCountWrapper {
 	background-image:url(/images/expand.png);
 }
 .drinkflair{

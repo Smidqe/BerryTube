@@ -161,9 +161,7 @@ function superSelect(data) {
 
 			if (win) {
 				win.close();
-				console.warn(
-					'closing!'
-				)
+
 				//prevent double close
 				$(document).unbind("mouseup.rmWindows");
 			}

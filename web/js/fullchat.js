@@ -35,7 +35,7 @@
         menu.css('background', 'none');
         menu.click(function () {
             playlist.show();
-            if (getCookie("plFolAcVid") == "1") {
+            if (getStorage("plFolAcVid") == "1") {
                 var x = ACTIVE.domobj.index();
                 x -= 2;
                 if (x < 0) x = 0;

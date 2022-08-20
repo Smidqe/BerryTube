@@ -56,9 +56,6 @@ socket.on("recvNewPlaylist", function (data) {
 	handleACL();
 });
 socket.on("recvPlaylist", async function (data) {
-
-	console.warn(data);
-
 	PLAYLIST = new LinkedList.Circular();
 	for (const video of data) {
 		PLAYLIST.append(video);
@@ -133,11 +130,8 @@ socket.on("forceVideoChange", function (data) {
 	dbg("forceVideoChange comeplete");
 });
 socket.on("dupeAdd", function () {
-	revertLoaders();
 });
 socket.on("badAdd", function () {
-	dbg("Bad Add");
-	revertLoaders();
 });
 socket.on("setAreas", async function (data) {
 	for (const area of data) {
@@ -157,6 +151,7 @@ socket.on("setAreas", async function (data) {
 socket.on("addVideo", function (data) {
 	unfuckPlaylist();
 	addVideo(data.video, data.queue, data.sanityid);
+
 });
 socket.on("addPlaylist", async function (data) {
 	dbg(data);
@@ -250,6 +245,7 @@ socket.on("userPart", function (data) {
 	rmUser(data.nick);
 });
 socket.on("shadowBan", function (data) {
+	//CHATLIST[data.nick].dom.classList.add('sbanned');
 	var o = $(`#chatlist ul li[nick="${data.nick}"]`);
 	o.addClass('sbanned');
 });

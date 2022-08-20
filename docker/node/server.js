@@ -55,8 +55,25 @@ const bcrypt = require('bcrypt');
 const { randomUUID } = require("crypto");
 const regexes = {
 	htmlBlacklist: /<[ ]*(script|frame|style|marquee|blink)[ ]*([^>]*)>/gi,
-
 }
+const banEmotes = [
+	'[](/ihavenomouthandimustscream)'
+	, '[](/bant)'
+	, '[](/mmmbananas)'
+	, '[](/celbanned)'
+	, '[](/seriouslybanned)'
+	, '[](/konahappy)'
+	, '[](/ppshutup)'
+	, '[](/bpstfu)'
+	, '[](/eatadick)'
+	, '[](/suggestionbox)'
+	, '[](/rargtfo)'
+	, '[](/fuckyoudobby)'
+	, '[](/cleese)'
+	, '[](/wingflipoff)'
+	, '[](/pokemonkilledmyparents)'
+	, '[](/fuckyourshit)'
+];
 
 process.on("uncaughtException", function (err) {
 	console.error(`Uncaught ${err.code}: ${err.message}`);
@@ -93,11 +110,8 @@ services.forEach(s => s.init());
 // This is probably the best solution to sending packets to all people matching x criteria easily.
 // Perhaps implement some way to let superusers see secret info, like IP's, shadownban status etc
 io.sockets.each = function (callback) {
-	var clients = io.sockets.clients();
-	for (var i = 0; i < clients.length; i++) {
-		(function (i) {
-			callback(clients[i]);
-		})(i);
+	for (const client of io.sockets.clients()) {
+		callback(client)
 	}
 };
 
@@ -106,7 +120,7 @@ function LinkedList() { }
 LinkedList.prototype = {
 	length: 0,
 	first: null,
-	last: null
+	last: null,
 };
 LinkedList.Circular = function () { };
 LinkedList.Circular.prototype = new LinkedList();
@@ -233,7 +247,7 @@ SERVER.BANS = [];
 SERVER.FILTERS = [];
 SERVER.DRINKS = 0;
 SERVER.FAILED_LOGINS = [];
-SERVER.RECENTLY_REGISTERED = [];
+SERVER.RECENTLY_REGISTERED = new Map();
 
 // sets where our log output goes for our default logger...
 DefaultLog.addLogger(
@@ -434,14 +448,10 @@ async function sendAreas(socket) {
 	socket.emit("setAreas", areas);
 }
 function removeBlacklistedHTML(content) {
-	const a = /<[ ]*(script|frame|style|marquee|blink)[ ]*([^>]*)>/gi;
-
-	var blacklist = ['script', 'frame', 'style', 'marquee', 'blink'];
-	for (var i in blacklist) {
-		var re = RegExp("<(/*[ ]*" + blacklist[i] + "[ ]*)([^>]*)>", 'gi');
-		content = content.replace(re, "&lt;$1$2&gt;");
-	}
-	return content;
+	return content.replace(
+		regexes.htmlBlacklist,
+		"&lt;$1$2&gt;"
+	);
 }
 /* Grumble, the regex above makes my syntax highlighter lose its mind. Putting this here to end the madness. */
 async function setAreas(areaname, content) {
@@ -785,24 +795,19 @@ function setVideoVolatile(socket, video, isVolat) {
 		"{mod} set {title} to {status}",
 		{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()), status: isVolat ? "volatile" : "not volatile" });
 }
+
 async function setVideoColorTag(socket, elem, tag, volat) {
 	if (!tag) {
 		elem.removeTag(false);
 	} else {
-		elem.setTag(tag, false);
+		elem.setTag(tag, volat);
 	}
-
-	if (volat != true) {
-		elem.removeTag(false);
-	} else {
-		elem.setTag(true, false);
-	}
-
+	
 	await databaseService.query`
 		UPDATE
 			videos
 		SET
-			meta = ${JSON.stringify(elem.meta)}
+			meta = ${JSON.stringify(elem.metadata())}
 		WHERE
 			videoid = ${elem.id()}
 	`;
@@ -1246,6 +1251,34 @@ function isTrackingTime() {
 	return !SERVER.LIVE_MODE;
 }
 
+async function setUserNote(data) {
+	if (!authService.can(socket.session, actions.ACTION_SET_USER_NOTE)) {
+		kickForIllegalActivity(socket, "You cannot set usernote");
+		return;
+	}
+
+	const {row} = await databaseService.query`
+		select meta from users where name = ${data.nick}
+	`;
+
+	const meta = {
+		...row[0].meta,
+		note: data.note
+	};
+
+	await databaseService.query`
+		update users set meta = ${JSON.stringify(meta)} where name = ${data.nick}
+	`.then(() => {
+		DefaultLog.info(events.EVENT_ADMIN_SET_NOTE,
+			"{mod} set {nick}'s note to '{note}'",
+			{ mod: getSocketName(socket), type: "user", nick: data.nick, note: data.note });
+
+		sessionService.forNick(d.nick, s => s.updateMeta(meta));
+		sessionService.forCan(actions.CAN_SEE_PRIVILEGED_USER_DATA,
+			session => session.emit("fondleUser", data));
+	});
+}
+
 
 /* RUN ONCE INIT */
 initPlaylist(function () {
@@ -1316,7 +1349,7 @@ io.sockets.on('connection', function (ioSocket) {
 
 	socket.on("setOverrideCss", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CAN_SET_CSS)) {
-			kickForIllegalActivity(socket, "You cannot set the CSS");
+			kickForIllegalActivity(socket, "You cannot set the override theme");
 			return;
 		}
 
@@ -1380,7 +1413,7 @@ io.sockets.on('connection', function (ioSocket) {
 
 		const logData = { mod: getSocketName(socket), type: "playlist", id: data.videoid };
 
-		if (!data.videoid.match(/^[\w \-#]{3,50}$/)) {
+		if (!/^[\w \-#]{3,50}$/.test(data.videoid)) {
 			DefaultLog.error(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} could not delete history for invalid id {id}", logData);
 			return;
 		}
@@ -1388,9 +1421,7 @@ io.sockets.on('connection', function (ioSocket) {
 		await databaseService.query`
 			delete from videos_history where videoid = ${data.videoid} limit 1
 		`
-			.then(() => {
-				DefaultLog.info(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} deleted history for id {id}", logData);
-			})
+			.then(() => DefaultLog.info(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} deleted history for id {id}", logData))
 			.catch((err) => DefaultLog.error(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} could not delete history for invalid id {id}", logData, err));
 	});
 	socket.on("randomizeList", function (data) {
@@ -1505,39 +1536,39 @@ io.sockets.on('connection', function (ioSocket) {
 	});
 
 	socket.on("registerNick", async function (data) {
+		if (!getToggleable("allowreg")) {
+			return socket.emit("loginError", { message: "Registrations are currently Closed. Sorry for the inconvenience!" })
+		}
+
 		const logData = { ip: socket.ip, nick: data.nick };
 
-		var i = SERVER.RECENTLY_REGISTERED.length;
-		var ip = socket.ip;
-
-		
-		if (!ip) { return false; }
-
-
-		var now = new Date();
-		// Backwards to splice on the go
-
-		/*
-		if (ip !== "172.20.0.1") {
-			
+		if (!socket.ip) { 
+			return false; 
 		}
-		*/
 
-		const isLocalIp = ip == "172.20.0.1";
-		if (!isLocalIp) {
-			while (--i >= 0) {
-				if (now - SERVER.RECENTLY_REGISTERED[i].time > SERVER.settings.core.register_cooldown) {
-					SERVER.RECENTLY_REGISTERED.splice(i, 1);
+		if (socket.ip !== "172.20.0.1") {
+			const now = new Date();
+			const registered = SERVER.RECENTLY_REGISTERED.get(socket.ip);
+
+			if (registered) {
+				if (now - registered.time > SERVER.settings.core.register_cooldown) {
+					SERVER.RECENTLY_REGISTERED.remove(socket.ip);
+				} else {
+					DefaultLog.error(
+						events.EVENT_REGISTER, 
+						"{nick} could not register from ip {ip}", 
+						logData, 
+						"You are registering too many usernames, try again later."
+					);
+
+					socket.emit("loginError", { message: "You are registering too many usernames, try again later." });
 				}
-				else if (SERVER.RECENTLY_REGISTERED[i].ip == ip) {
-					onRegisterError("You are registering too many usernames, try again later.");
-					return;
-				}
+			} else {
+				SERVER.RECENTLY_REGISTERED.set(socket.ip, now);
 			}
 		}
 
 		const conditions = [
-			[() => !getToggleable("allowreg"), "Registrations are currently Closed. Sorry for the inconvenience!"],
 			[(data) => !data.nick, "No username inserted"],
 			[(data) => !data.pass, "No password inserted"],
 			[(data) => !/^[\w]+$/ig.test(data.nick), "Username must contain only letters, numbers and underscores."]
@@ -1550,7 +1581,7 @@ io.sockets.on('connection', function (ioSocket) {
 		for (const [fail, message] of conditions) {
 			if (fail(data)) {
 				DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}", logData, message);
-				socket.emit("loginError", { message });
+				return socket.emit("loginError", { message });
 			}
 		}
 
@@ -1558,9 +1589,10 @@ io.sockets.on('connection', function (ioSocket) {
 			select * from users where name like ${data.nick}
 		`;
 
-		//user
+		//TODO: Just error that username is already in use
 		if (result.length >= 1) {
-			return sessionService.login(socket, data);
+			DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}, username already taken", logData);
+			return socket.emit("loginError", { message: "Username already in use" });
 		}
 
 		bcrypt.hash(data.pass, SERVER.settings.core.bcrypt_rounds, function (err, hash) {
@@ -1573,8 +1605,9 @@ io.sockets.on('connection', function (ioSocket) {
 			databaseService.query`
 				insert into users (name, pass, type)
 				values (${data.nick}, ${hash}, ${0})
-			`.then(() => sessionService.login(socket, data))
-			.catch((err) => DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}", logData, err));
+			`
+				.then(() => sessionService.login(socket, data))
+				.catch((err) => DefaultLog.error(events.EVENT_REGISTER, "{nick} could not register from ip {ip}", logData, err));
 		});
 	});
 	socket.on("changePassword", function (data) {
@@ -1627,6 +1660,10 @@ io.sockets.on('connection', function (ioSocket) {
 
 		const [from, to] = SERVER.PLAYLIST.multiple([data.from, data.to]);
 
+		if (!from || !to) {
+			return doorStuck(socket);
+		}
+
 		if (from.id() !== data.sanityid) {
 			return doorStuck(socket);
 		}
@@ -1654,11 +1691,7 @@ io.sockets.on('connection', function (ioSocket) {
 		const prev = SERVER.ACTIVE;
 		const target = SERVER.PLAYLIST.at(data.index);
 
-		if (!target) {
-			return doorStuck(socket);
-		}
-
-		if (data.sanityid && target.videoid !== data.sanityid) {
+		if (!target || target.videoid !== data.sanityid) {
 			return doorStuck(socket);
 		}
 
@@ -1684,7 +1717,7 @@ io.sockets.on('connection', function (ioSocket) {
 
 		const video = SERVER.PLAYLIST.at(data.index);
 
-		if (video.id() !== data.sanityid) {
+		if (!video || video.id() !== data.sanityid) {
 			return doorStuck(socket);
 		}
 
@@ -1696,7 +1729,7 @@ io.sockets.on('connection', function (ioSocket) {
 			sendStatus("forceVideoChange", io.sockets);
 		}
 		
-		delVideo(video, data.sanityid, socket);
+		delVideo(video, data.index, data.sanityid, socket);
 	});
 	socket.on("addVideo", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
@@ -1711,6 +1744,7 @@ io.sockets.on('connection', function (ioSocket) {
 			...serviceLocator,
 		};
 
+		
 		if (!VideoHandlers.has(data.videotype)) {
 			DefaultLog.error(
 				events.EVENT_ADMIN_ADDED_VIDEO,
@@ -1862,27 +1896,11 @@ io.sockets.on('connection', function (ioSocket) {
 		}
 
 		if (isbanning) {
-			var banEmotes = ['[](/ihavenomouthandimustscream)'
-				, '[](/bant)'
-				, '[](/mmmbananas)'
-				, '[](/celbanned)'
-				, '[](/seriouslybanned)'
-				, '[](/konahappy)'
-				, '[](/ppshutup)'
-				, '[](/bpstfu)'
-				, '[](/eatadick)'
-				, '[](/suggestionbox)'
-				, '[](/rargtfo)'
-				, '[](/fuckyoudobby)'
-				, '[](/cleese)'
-				, '[](/wingflipoff)'
-				, '[](/pokemonkilledmyparents)'
-				, '[](/fuckyourshit)'];
 			message = banEmotes[Math.floor(Math.random() * banEmotes.length)] + ' ' + message;
 		}
+
 		message = '/me ' + message;
 		_sendChat(socket.session.nick, 3, { msg: message, metadata: { channel: 'admin' } }, socket);
-		const logData = { mod: getSocketName(socket), ip: socket.ip, type: "site" };
 
 		if (isbanning) {
 			sessionService.setShadowbanForNick(targetNick, true, temp);
@@ -1940,36 +1958,14 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
-		if (data.action == "setUserNote") {
-			var d = data.info; // Drop action name.
-			if (!authService.can(socket.session, actions.ACTION_SET_USER_NOTE)) {
-				kickForIllegalActivity(socket, "You cannot set usernote");
-				return;
-			}
+		if (!/^[\w]+$/.test(data.info.nick)) {
+			return;
+		}
 
-			// She wants the d.nick :3
-			if (/^[\w]+$/.test(d.nick)) {
-				const {row} = await databaseService.query`
-					select meta from users where name = ${d.nick}
-				`;
-
-				const meta = {
-					...row[0].meta,
-					note: d.note
-				};
-
-				await databaseService.query`
-					update users set meta = ${JSON.stringify(meta)} where name = ${d.nick}
-				`.then(() => {
-					DefaultLog.info(events.EVENT_ADMIN_SET_NOTE,
-						"{mod} set {nick}'s note to '{note}'",
-						{ mod: getSocketName(socket), type: "user", nick: d.nick, note: d.note });
-
-					sessionService.forNick(d.nick, s => s.updateMeta(meta));
-					sessionService.forCan(actions.CAN_SEE_PRIVILEGED_USER_DATA,
-						session => session.emit("fondleUser", data));
-				});
-			}
+		switch (data.action) {
+			case "setUserNote": setUserNote(data.info);
+			default: 
+				break;
 		}
 	});
 
@@ -1995,13 +1991,10 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
-		if (!data) {
-			data = {};
-		}
-		if (!data.delay) {
-			data.delay = true;
-		}
-		io.sockets.emit('forceRefresh', data);
+		io.sockets.emit('forceRefresh', {
+			...(data || {}),
+			delay: true
+		});
 	});
 	socket.on("crash", function (data) {
 		//socket.emit(socket);

@@ -438,9 +438,7 @@ body {
 	content: url('/images/note.png');
 	padding-left: 10px;
 }
-.chatbuffer.wide, #chatinput.wide, #rcvOverlay.wide, #chattabs.wide {
-    width: 100%;
-}
+
 #connectedCountWrapper {
     color: black;
     height: 20px;
@@ -1087,4 +1085,12 @@ td > div#passwordbtn {
 
 .edit-hover {
 	background-image: url("/images/attn.png");
+}
+
+#chatpane.wide #rcvOverlay,
+#chatpane.wide #chatinput,
+#chatpane.wide .chatbuffer,
+#chatpane.wide #chattabs
+{
+	width: 100%;
 }

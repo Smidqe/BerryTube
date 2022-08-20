@@ -56,10 +56,6 @@ exports.Video = class {
 		delete this.meta[volatile ? 'colorTagVolat' : 'colorTag'];
 	}
 
-	hasTag() {
-		
-	}
-
 	setVolatile(volatile) {
 		this.volat = volatile;
 	}
