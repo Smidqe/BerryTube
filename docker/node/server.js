@@ -1569,13 +1569,13 @@ io.sockets.on('connection', function (ioSocket) {
 		}
 
 		const conditions = [
-			[(data) => !data.nick, "No username inserted"],
-			[(data) => !data.pass, "No password inserted"],
-			[(data) => !/^[\w]+$/ig.test(data.nick), "Username must contain only letters, numbers and underscores."]
-			[(data) => SERVER.nick_blacklist.has(data.nick.toLowerCase()), "Username not available."],
-			[(data) => data.nick.length > 15, "Username must be under 15 characters."],
-			[(data) => data.pass.length <= 5, "Password must be 6 or more characters."],
-			[(data) => data.pass !== data.pass2, "Passwords do not match."],
+			[!data.nick, "No username inserted"],
+			[!data.pass, "No password inserted"],
+			[!/^[\w]+$/ig.test(data.nick), "Username must contain only letters, numbers and underscores."]
+			[SERVER.nick_blacklist.has(data.nick.toLowerCase()), "Username not available."],
+			[data.nick.length > 15, "Username must be under 15 characters."],
+			[data.pass.length <= 5, "Password must be 6 or more characters."],
+			[data.pass !== data.pass2, "Passwords do not match."],
 		];
 
 		for (const [fail, message] of conditions) {

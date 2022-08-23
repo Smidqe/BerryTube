@@ -18,7 +18,9 @@ const Videosources = [
 	//youtube
 	['yt', false, /youtube\.com\/watch.*?[&?]v=([\w-]{11})/g],
 	['yt', false, /youtu\.be\/([\w-]{11})/],
+	['yt', false, /youtube\.com\/shorts\/([\w-]{11})/],
 	['yt', false, /i\.ytimg\.com\/an_webp\/([\w-]{11})\//g],
+	
 	
 	//dailymotion
 	['dm', false, /dailymotion.com\/(?:embed\/)?video\/([\w]+)/g],
@@ -2456,7 +2458,12 @@ function setPlaylistPosition(to) {
 		ACTIVE.domobj[0].classList.remove("active");
 	}
 
-	ACTIVE = PLAYLIST.find((video) => video.videoid === to.video.videoid);
+	//don't search if the video we are switching to is next
+	if (ACTIVE?.next?.videoid === to.video.videoid) {
+		ACTIVE = ACTIVE.next;
+	} else {
+		ACTIVE = PLAYLIST.find((video) => video.videoid === to.video.videoid);
+	}
 
 	if (ACTIVE.domobj) {
 		ACTIVE.domobj[0].classList.add("active");

@@ -96,6 +96,7 @@ socket.on("hbVideoDetail", function (data) {
 		}
 
 		flags.play = data.state === 1 && videoState !== 1;
+		flags.pause = data.state === 2;
 
 		if (data.state !== videoState && !flags.play) {
 			dbg(`Player states don't match: ${data.state} !== ${videoState}`);
@@ -103,8 +104,14 @@ socket.on("hbVideoDetail", function (data) {
 		}
 
 		if (flags.play) {
-			PLAYER.play()
+			PLAYER.play();
 		}
+
+		if (flags.pause) {
+			PLAYER.pause();
+		}
+
+		if (data.state === 2)
 
 		if (flags.seek[0] && time !== -1) {
 			PLAYER.seek(flags.seek[1]);
