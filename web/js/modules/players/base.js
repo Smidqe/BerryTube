@@ -108,8 +108,6 @@ export class Base {
 		this.retries = 0;
 	}
 
-	setReady() {}
-
 	ready(_cb) {}
 
 	loadPlayer(_id, _timestamp, _volume, _length, _meta) {}
@@ -144,10 +142,6 @@ export class Base {
 
 	getVideoState() {
 		return State.PLAYING;
-	}
-
-	isReady() {
-		return this.status === Status.READY;
 	}
 
 	destroy() {}
