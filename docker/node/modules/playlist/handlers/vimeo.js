@@ -22,7 +22,7 @@ exports.VimeoHandler = class extends Handler {
 			`api/oembed.json?url=http%3A//vimeo.com/${id}`
 		];
 
-		let response = await this.json(paths[0]).catch(this.json(paths[1]));
+		let response = await this.json(paths[0]).catch(await this.json(paths[1]));
 
 		if (!response) {
 			throw new Error("[Vimeo]: Failed to acquire vimeo video for id");

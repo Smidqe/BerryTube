@@ -451,7 +451,8 @@ function showIgnoreDialog() {
 		$('<div/>').addClass('unban button').text("Unignore").css('width', '52px').appendTo(row).click(function () {
 			IGNORELIST.splice(IGNORELIST.indexOf(name), 1);
 			localStorage.setItem('ignoreList', JSON.stringify(IGNORELIST));
-			$(`#chatlist li[nick="${name}"]`).removeClass('ignored');
+			CHATLIST.get(name)?.dom.classList.remove('ignored');
+			
 			row.remove();
 		});
 		$('<div/>').addClass('clear').appendTo(row);
@@ -1553,7 +1554,7 @@ function addChatMsg(data, _to) {
 		}
 
 		if (includeTimestamp) {
-			var d = new Date(data.msg.timestamp ?? Date.now());
+			const d = new Date(data.msg.timestamp ?? Date.now());
 
 			const h = addZero(d.getHours());
 			const m = addZero(d.getMinutes());
@@ -1575,20 +1576,19 @@ function addChatMsg(data, _to) {
 	});
 }
 function doSqueeNotify() {
-	if (!window.flags.get('focused')) {
-		if (getStorage('notifyMute') == 0) {
-			NOTIFY.play();
-		}
-		clearInterval(CHAT_NOTIFY);
-		CHAT_NOTIFY = setInterval(function () {
-			if (document.title == WINDOW_TITLE) {
-				document.title = NOTIFY_TITLE;
-			}
-			else {
-				document.title = WINDOW_TITLE;
-			}
-		}, 1000);
+	if (window.flags.get('focused')) {
+		return;
 	}
+
+	if (getStorage('notifyMute') == 0) {
+		NOTIFY.play();
+	}
+
+	clearInterval(CHAT_NOTIFY);
+
+	CHAT_NOTIFY = setInterval(function () {
+		document.title = document.title === WINDOW_TITLE ? NOTIFY_TITLE : WINDOW_TITLE
+	}, 1000);
 }
 
 function manageDrinks(drinks) {
@@ -1719,7 +1719,7 @@ function addNewMailMessage(nick, msg) {
 			}
 		}));
 
-	if (typeof postEmoteEffects != 'undefined') {
+	if (window.postEmoteEffects) {
 		postEmoteEffects(newMsg);
 	}
 
@@ -1732,6 +1732,21 @@ function addNewMailMessage(nick, msg) {
 
 }
 function plSearch(term) {
+	/*
+	if (typeof term == "undefined" || /^$/.test(term) || term.length < 3) {
+		PLAYLIST.dom.classList.remove("searching");
+		PLAYLIST.each((node) => {
+			node.dom.
+		})
+		$("#playlist").removeClass("searching");
+		$("#plul li").removeClass("search-hidden");
+		$("#plul li.history").remove();
+		$("#plul li .title").removeAttr("active-offset");
+		scrollToPlEntry(ACTIVE.domobj.index());
+		return;
+	}
+	*/
+
 	if (typeof term == "undefined" || /^$/.test(term) || term.length < 3) {
 		$("#playlist").removeClass("searching");
 		$("#plul li").removeClass("search-hidden");

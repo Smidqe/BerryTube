@@ -4,17 +4,50 @@ const { Handler } = require("./base");
 exports.TwitchHandler = class extends Handler {
 	constructor() {
 		super();
+
+		this.token = {
+			value: null,
+			expiry: new Date()
+		};
 	}
 
 	async api(endpoint, params = {}) {
-		return super.api(
-			`https://api.twitch.tv/kraken/${endpoint}`,
-			{
-				'Accept': 'application/vnd.twitchtv.v5+json',
-				'Client-ID': '16m5lm4sc21blhrrpyorpy4tco0pa9'
-			},
-			params
-		);
+		const url = new URL(endpoint, 'https://api.twitch.tv/helix/');
+		
+		for (const [key, value] of Object.entries(params)) {
+			url.searchParams.set(key, value);
+		}
+
+		return fetch(url.toString(), {
+			headers: {
+				'Client-Id': process.env.TWITCH_CLIENT_ID,
+				'Authorization': `Bearer ${this.token.access_token}`
+			}
+		});
+	}
+
+	async getToken() {
+		if (this.token.value && this.token.expiry.getTime() > Date.now()) {
+			return this.token.value;
+		}
+
+		const response = await fetch('https://id.twitch.tv/oauth2/token', {
+			method: 'POST',
+			body: new URLSearchParams({
+				client_id: process.env.TWITCH_CLIENT_ID,
+				client_secret: process.env.TWITCH_CLIENT_SECRET,
+				grant_type: 'client_credentials',
+			}),
+		});
+
+		if (!response.ok) {
+			throw new Error('[Soundcloud]: Unable to fetch Twitch access token');
+		}
+
+		this.token.access_token = await response.json();
+		this.token.expiry = new Date();
+		this.token.expiry.setSeconds(this.token.expiry.getSeconds() + this.token.access_token.expires_in * 0.9);
+		return this.token.access_token;
 	}
 
 	async getVideo(id) {

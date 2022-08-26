@@ -902,44 +902,46 @@ function addUser(data, sortafter, animate = false) {
 		[2, "admin"]
 	]);
 
+	const dom = createElement(
+		'li', {nick: data.nick, ip: data.meta?.ip}, 
+		createElement('span', {class: 'chatlistname', text: data.nick})
+	);
+
+	const classes = [
+		['me', data.nick === NAME],
+		['ignored', IGNORELIST.includes(data.nick)],
+		['sbanned', data.shadowbanned],
+		[typeMappings.get(data.type), true]
+	];
+
+	for (const [cl, applies] of classes) {
+		dom.classList.toggle(cl, applies);
+	}
+
+	const user = {
+		lastMessage: 0,
+		type: typeMappings.get(data.type),
+		dom,
+		ip: data.meta?.ip,
+		aliases: data.meta?.aliases,
+		note: data.meta?.note
+	};
+	
+	CHATLIST.set(data.nick, user);
+
 	whenExists('#chatlist ul', function (chatul) {
-		const user = createElement(
-			'li', {nick: data.nick}, 
-			createElement('span', {class: 'chatlistname', text: data.nick})
-		);
-		
 		chatul[0].append(
-			user
+			dom
 		);
+
+		dom.onclick = () => showUserActions($(dom));
+		dom.oncontextmenu = () => {
+			showUserActions($(dom));
+			return false;
+		};
 
 		if (animate) {
-			$(user).show('blind')
-		}
-
-		user.classList.toggle('me', data.nick === NAME);
-		user.classList.toggle('ignored', IGNORELIST.includes(data.nick));
-		user.classList.toggle('sbanned', data.shadowbanned)
-
-		user.classList.add(typeMappings.get(data.type));
-
-		if (data.type !== -2) {
-			CHATLIST.set(data.nick, {
-				lastMessage: 0,
-				type: typeMappings.get(data.type),
-				dom: user
-			});
-
-			user.onclick = () => showUserActions($(user));
-			user.oncontextmenu = () => {
-				showUserActions($(user));
-				return false;
-			};
-		}
-
-		if (data.meta) {
-			user.setAttribute('ip', data.meta.ip);
-			updateUserAliases(data.meta.ip, data.meta.aliases);
-			updateUserNote(data.nick, data.meta.note);
+			$(dom).show('blind')
 		}
 
 		if (sortafter) {
@@ -947,23 +949,27 @@ function addUser(data, sortafter, animate = false) {
 		}
 	});
 }
-function updateUserAliases(ip, aliases) {
-	$('#chatlist li[ip="' + ip + '"]').data('aliases', aliases);
-}
+
 function updateUserNote(nick, note) {
-	const user = document.querySelector(`#chatlist li[nick="${nick}"]`);
+	const user = CHATLIST.get(nick);
 
 	if (!user) {
 		return;
 	}
 
 	user.note = note ?? "";
-	user.setAttribute('title', user.note);
-	user.classList.toggle('note', user.note.length > 0)
+	user.dom.setAttribute('title', user.note);
+	user.dom.classList.toggle('note', user.note.length > 0);
 }
 
 function rmUser(nick) {
-	document.querySelector(`#chatlist ul li[nick="${nick}"]`)?.remove();
+	const user = CHATLIST.get(nick);
+
+	if (!user) {
+		return;
+	}
+
+	user.dom.remove();
 	CHATLIST.delete(nick);
 }
 

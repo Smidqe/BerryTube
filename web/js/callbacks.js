@@ -47,8 +47,9 @@ socket.on("renewPos", function (data) {
 });
 socket.on("recvNewPlaylist", function (data) {
 	PLAYLIST = new LinkedList.Circular();
-	for (var i in data) {
-		PLAYLIST.append(data[i]);
+
+	for (const video of data) {
+		PLAYLIST.append(video)
 	}
 
 	newPlaylist($("#plul"));
@@ -56,7 +57,9 @@ socket.on("recvNewPlaylist", function (data) {
 	handleACL();
 });
 socket.on("recvPlaylist", async function (data) {
+	//PLAYLIST.initialize(data);
 	PLAYLIST = new LinkedList.Circular();
+
 	for (const video of data) {
 		PLAYLIST.append(video);
 	}
@@ -236,6 +239,8 @@ socket.on("newChatList", function (data) {
 	initChatList(data);
 });
 socket.on("userJoin", function (data) {
+
+	
 	if (getVal('chatlistInitialised')) {
 		addUser(data, true, data.nick !== NAME);
 	}
@@ -252,13 +257,23 @@ socket.on("userPart", function (data) {
 	rmUser(data.nick);
 });
 socket.on("shadowBan", function (data) {
-	//CHATLIST[data.nick].dom.classList.add('sbanned');
-	var o = $(`#chatlist ul li[nick="${data.nick}"]`);
-	o.addClass('sbanned');
+	const user = CHATLIST.get(data.nick);
+
+	if (!user) {
+		return;
+	}
+
+	user.dom.classList.add('sbanned');
 });
+
 socket.on("unShadowBan", function (data) {
-	var o = $(`#chatlist ul li[nick="${data.nick}"]`);
-	o.removeClass('sbanned');
+	const user = CHATLIST.get(data.nick);
+
+	if (!user) {
+		return;
+	}
+
+	user.dom.classList.remove('sbanned');
 });
 socket.on("drinkCount", function (data) {
 	manageDrinks(data.drinks);
