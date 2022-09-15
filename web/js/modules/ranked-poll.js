@@ -96,6 +96,7 @@ export class RankedPoll {
 		}
 
 		function updateButtons() {
+			//maxVotedRank = Math.max(...ballot);
 			let maxVotedRank = 0;
 			for (let i = 0; i < ballot.length; i++) {
 				const rank = ballot[i];

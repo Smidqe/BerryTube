@@ -1346,12 +1346,13 @@ function scrollBuffersToBottom() {
 	const heights = [];
 	requestAnimationFrame(() => {
 		heights.push(...buffers.map(n => n.scrollHeight));
-	})
+	});
+
 	requestAnimationFrame(() => {
 		for (let index = 0; index < heights.length; index++) {
 			buffers[index].scrollTop = heights[index]
 		}
-	})
+	});
 }
 
 function addChatMsg(data, _to) {
@@ -1359,30 +1360,23 @@ function addChatMsg(data, _to) {
 		// Added for a safe event hook for handling addons, etc.
 		btEvents.emit("chat", data);
 
-		//const [nick, msg, meta, isGhost] = [data.msg.nick, data.msg.msg, data.msg.metadata, data.ghost]
-		//const message = data.msg;
-
-		// New format cause fuck all that argument shit. know whats cool? Objects.
-		var nick = data.msg.nick;
-		var msgText = data.msg.msg; // Don't hate me.
-		var metadata = data.msg.metadata;
-		var isGhost = data.ghost;
-
 		const info = data.msg;
+		const timestamp = new Date().getTime();
+		const wrap = createElement('div', {
+			class: 'msgwrap',
+			nick: info.nick ?? ""
+		});
 
-
-		const wrap = createElement('div', {class: 'msgwrap'});
-		const message = createElement('div');
+		const message = createElement('div', {
+			class: 'message',
+			timestamp
+		});
 
 		wrap.append(
 			message
 		);
 
-		if (typeof (nick !== "undefined")) {
-			wrap.setAttribute('nick', info.nick);
-		}
-
-		if (IGNORELIST.includes(info.nick) && !metadata.nameflaunt) {
+		if (IGNORELIST.includes(info.nick) && !info.metadata.nameflaunt) {
 			return;
 		}
 
@@ -1390,9 +1384,8 @@ function addChatMsg(data, _to) {
 			return;
 		}
 
-		//TODO: Replace this with information in CHATLIST (faster and easier)
 		const user = CHATLIST.get(info.nick);
-		const isSquee = metadata.isSquee || (NAME?.length > 0 && detectName(NAME, msgText));
+		const isSquee = info.metadata.isSquee || detectName(NAME, info.msg);
 		
 		let includeTimestamp = false;
 
@@ -1401,43 +1394,41 @@ function addChatMsg(data, _to) {
 				user.type
 			);
 
-			user.lastMessage = new Date().getTime();
+			user.lastMessage = timestamp;
 		}
 
-		if (data.msg.metadata.graymute) {
+		if (info.metadata.graymute) {
 			wrap.classList.add('graymute');
 		}
 
-		message.classList.add('message');
-
-		if (data.msg.emote) {
+		if (info.emote) {
 			message.classList.add(
-				data.msg.emote === 'poll' ? 'pollNote' : data.msg.emote
+				info.emote === 'poll' ? 'pollNote' : info.emote
 			);
 		}
 
 		to[0].lastMsgRecvBy = "";
 
-		switch (data.msg.emote) {
+		switch (info.emote) {
 			case 'spoiler':
 			case 'sweetiebot':
 			case 'request':
 			case 'act': {
 				const inner = createElement('span', {class: 'msg'});
 
-				if (data.msg.emote === 'request') {
-					inner.append(formatChatMsg("requests " + msgText));
+				if (info.emote === 'request') {
+					inner.append(formatChatMsg("requests " + info.msg));
 				} else {
-					inner.append(formatChatMsg(msgText));
+					inner.append(formatChatMsg(info.msg));
 				}
 
-				message.classList.add('message', data.msg.emote);
+				message.classList.add('message', info.emote);
 				message.append(
-					createElement('span', {class: 'nick', text: nick}),
+					createElement('span', {class: 'nick', text: info.nick}),
 					inner,
 				)
 
-				if (data.msg.emote === 'spoiler') {
+				if (info.emote === 'spoiler') {
 					message.lastChild.before(
 						createElement('span', {class: 'spoiltag', text: 'SPOILER: '})
 					)
@@ -1449,10 +1440,10 @@ function addChatMsg(data, _to) {
 			}
 			case 'server':
 			case 'poll': {
-				let inner = msgText;
+				let inner = info.msg;
 
-				if (data.msg.emote === "poll") {
-					inner = `${nick} has created a new poll: "${msgText}"`;
+				if (info.emote === "poll") {
+					inner = `${info.nick} has created a new poll: "${info.msg}"`;
 				}
 
 				message.append(
@@ -1463,10 +1454,10 @@ function addChatMsg(data, _to) {
 			}
 			case 'rcv': {
 				message.append(
-					createElement('span', {class: 'nick', text: `${nick}:`}),
+					createElement('span', {class: 'nick', text: `${info.nick}:`}),
 					createElement('span', {class: 'msg'}),
 					createElement('span', {}, 
-						formatChatMsg(msgText)
+						formatChatMsg(info.msg)
 					)
 				);
 
@@ -1483,18 +1474,18 @@ function addChatMsg(data, _to) {
 				const table = createElement('table', {}, 
 					createElement('tr', {}, 
 						createElement('td', {}, 
-							createElement('span', {class: 'nick', text: `${nick}:`}),
-							createElement('span', {class: 'msg', html: `${msgText} drink!`})
+							createElement('span', {class: 'nick', text: `${info.nick}:`}),
+							createElement('span', {class: 'msg', html: `${info.msg} drink!`})
 						)
 					)
 				);
 
-				if (data.msg.multi) {
+				if (info.multi) {
 					table.firstChild.append(
 						createElement(
 							'td',
 							{},
-							createElement('span', {class: 'multi', text: `${data.msg.multi}x`})
+							createElement('span', {class: 'multi', text: `${info.multi}x`})
 						)
 					)
 				}
@@ -1506,16 +1497,16 @@ function addChatMsg(data, _to) {
 				break;
 			}
 			case false: {
-				if (to[0].lastMsgRecvBy !== nick) {
-					let name = createElement('span', {class: 'nick', text: nick});
+				if (to[0].lastMsgRecvBy !== info.nick) {
+					let name = createElement('span', {class: 'nick', text: info.nick});
 
-					if (metadata.nameflaunt) {
-						name.classList.add('flaunt', `level_${data.msg.type}`)
+					if (info.metadata.nameflaunt) {
+						name.classList.add('flaunt', `level_${info.type}`)
 					}
 
-					if (metadata.flair) {
+					if (info.metadata.flair) {
 						name.append(
-							createElement('div', {class: `flair flair_${metadata.flair}`}),
+							createElement('div', {class: `flair flair_${info.metadata.flair}`}),
 							':'
 						);
 					} else {
@@ -1531,22 +1522,22 @@ function addChatMsg(data, _to) {
 
 				message.append(
 					createElement('span', {class: 'msg'},
-						createElement('span', {class: 'msg'}, formatChatMsg(msgText))
+						createElement('span', {class: 'msg'}, formatChatMsg(info.msg))
 					)	
 				);
 
-				to[0].lastMsgRecvBy = nick;
+				to[0].lastMsgRecvBy = info.nick;
 				break;
 			}
 			default: {
-				dbg(`Unknown message type, how? ${data.msg.emote}`)
+				dbg(`Unknown message type, how? ${info.emote}`)
 			}
 		}
 
-		if (isSquee && ['act', 'sweetiebot', 'rcv', false].includes(data.msg.emote)) {
+		if (isSquee && ['act', 'sweetiebot', 'rcv', false].includes(info.emote)) {
 			wrap.classList.add("highlight");
 			doSqueeNotify();
-			addNewMailMessage(nick, data.msg.msg);
+			addNewMailMessage(info.nick, info.msg);
 		}
 
 		if (to[0].childNodes.length > 500) {
@@ -1554,7 +1545,7 @@ function addChatMsg(data, _to) {
 		}
 
 		if (includeTimestamp) {
-			const d = new Date(data.msg.timestamp ?? Date.now());
+			const d = new Date(info.timestamp ?? timestamp);
 
 			const h = addZero(d.getHours());
 			const m = addZero(d.getMinutes());
@@ -1565,8 +1556,8 @@ function addChatMsg(data, _to) {
 			)
 		}
 
-		if (!isGhost) {
-			notifyNewMsg(metadata.channel, isSquee, data.msg.emote == "rcv");
+		if (!data.ghost) {
+			notifyNewMsg(info.metadata.channel, isSquee, info.emote == "rcv");
 			scrollBuffersToBottom();
 		}
 
@@ -1618,43 +1609,62 @@ function handleNumCount(data) {
 		area[0].textContent = CONNECTED;
 	});
 }
+
 function closePoll(data) {
 	if (lastPollCountdown) {
 		lastPollCountdown.dispose();
 		lastPollCountdown = null;
 	}
 
+	switch (data.pollType) {
+		case 'ranked': {
+			onModuleLoaded(() => window.rankedPolls.closeRankedPoll());
+			break;
+		}
+		case 'normal': {
+			const poll = document.querySelector('.poll.active');
+
+			//if (data.sort && !isEpisodePoll())
+			if (data.sort) {
+				const list = poll.querySelector('ul');
+				const options = data.options2;
+
+				[...list.children].sort((a, b) => {
+					const ops = [$(a), $(b)].map((e, i) => {
+						return {
+							op: options[e.find('.btn').data('op')],
+							index: i,
+							votes: data.votes[i]
+						};	
+					});
+
+					const diff = ops[0].votes - ops[1].votes;
+
+					if (diff === 0 && (ops[0].op.isTwoThirds || ops[1].op.isTwoThirds)) {
+						if (ops[0].op.isTwoThirds && ops[1].op.isTwoThirds) {
+							return 0;
+						}
+
+						if (ops[0].op.isTwoThirds) {
+							return 1;
+						} else {
+							return -1;
+						}
+					}
+
+					return diff;
+
+				}).forEach(el => list.appendChild(el))
+			}
+
+			break;
+		}
+	}
+
+	$(".poll.active").removeClass("active");
+
 	$("#pollpane .poll-auto-close").remove();
 	$("#pollpane .poll-control").remove();
-
-	if (data.pollType == "ranked") {
-		onModuleLoaded(() => window.rankedPolls.closeRankedPoll());
-		$(".poll.active").removeClass("active");
-	} else {
-		// sort results and unbind old buttons
-		const list = $(".poll.active").removeClass("active").find("ul");
-		list
-			.find("li")
-			.detach()
-			.sort(function(a, b) {
-				const aOp = $(a).find(".btn").data("op");
-				const bOp = $(b).find(".btn").data("op");
-				const aVotes = data.votes[aOp];
-				const bVotes = data.votes[bOp];
-
-				if (aVotes === bVotes) {
-					return 0;
-				}
-				return aVotes < bVotes ? 1 : -1;
-			})
-			.each(function(_, val) {
-				$(val)
-					.appendTo(list)
-					.find(".btn")
-					.unbind("click")
-					.css("pointer-events", "none");
-			});
-	}
 
 	// remove old polls...
 	var keep = getStorage("keeppolls");
@@ -1787,149 +1797,262 @@ function plSearch(term) {
 }
 function newPoll(data) {
 	if (data.ghost && IGNORE_GHOST_MESSAGES) {
-		// Ghost poll on a reconnect; just revote, don't redisplay it
-		var vote = $('.voted');
-		if (vote.length > 0) {
-			// Just recast the vote - the CSS should still be set, and the response
-			// should handle making sure the numbers are all correct
-			socket.emit('votePoll', { op: vote.data('op') });
-		}
-	} else {
-		const $existingPoll = $(".poll.active");
-		if ($existingPoll.length) {
-			const pollId = $existingPoll.data("id");
-			if (pollId === data.id) {
-				updatePoll(data);
-				return;
-			}
-
-			closePoll({});
-			$existingPoll.removeClass("active");
+		const vote = document.querySelector('.voted')
+		
+		if (vote) {
+			socket.emit('votePoll', { op: $(vote).data('op') });
 		}
 
-		// New poll, or ghost poll on an initial connection
-		addChatMsg({
-			msg: {
-				emote: "poll",
-				nick: data.creator,
-				type: 0,
-				msg: data.title,
-				multi: 0,
-				metadata: false
-			},
-			ghost: false
-		}, '#chatbuffer');
+		return;
+	}
 
-		whenExists("#pollpane", stack => {
-			POLL_TITLE_FORMAT = data.title;
-			POLL_OPTIONS.splice(0, POLL_OPTIONS.length);
+	const $existingPoll = document.querySelector(".poll.active");
+	if ($existingPoll) {
+		if ($existingPoll.pollId === data.id) {
+			updatePoll(data);
+			return;
+		}
 
-			const $poll = $("<div />")
-				.addClass("poll")
-				.addClass("active")
-				.data("id", data.id)
-				.prependTo(stack);
+		closePoll({});
+		$existingPoll.removeClass("active");
+	}
 
-			const $closeButton = $('<div/>').addClass("btn").addClass("close").text("X").appendTo($poll);
-			const $title = $('<div/>').addClass("title").text(getPollTitle(data)).appendTo($poll);
+	// New poll, or ghost poll on an initial connection
+	addChatMsg({
+		msg: {
+			emote: "poll",
+			nick: data.creator,
+			type: 0,
+			msg: data.title,
+			multi: 0,
+			metadata: false
+		},
+		ghost: false
+	}, '#chatbuffer');
 
-			$closeButton.click(() => $poll.hide("blind"));
+	whenExists("#pollpane", stack => {
+		POLL_TITLE_FORMAT = data.title;
+		POLL_OPTIONS.splice(0, POLL_OPTIONS.length);
 
-			if (data.pollType == "ranked") {
-				$poll.addClass("ranked-poll");
+		const close = createElement('div', {
+			class: 'btn close',
+			text: 'X'
+		});
+
+		close.addEventListener('click', function() {
+			this.closest('.poll').remove();
+		});
+
+		const poll = createElement('div', {class: 'poll active'},
+			close,
+			createElement('div', {class: 'title'},
+				//createElement('span', {text: getPollTitle(data)}),
+				close
+			)
+		);
+
+		poll.pollId = data.id;
+
+
+
+		/*
+		const $poll = $("<div />")
+			.addClass("poll")
+			.addClass("active")
+			.prependTo(stack);
+
+		$poll[0].pollId = data.id;
+
+
+
+		const $closeButton = $('<div/>').addClass("btn").addClass("close").text("X").appendTo($poll);
+		const $title = $('<div/>').addClass("title").text(getPollTitle(data)).appendTo($poll);
+
+		$closeButton.click(() => $poll.hide("blind"));
+		*/
+
+		stack.prepend(poll);
+
+		switch (data.pollType) {
+			case "ranked": {
+				poll.classList.add('ranked-poll');
+				
 				onModuleLoaded(() => {
-					window.rankedPolls.createRankedPoll(data, $poll[0]);
+					window.rankedPolls.createRankedPoll(data, poll);
 					updateRankedPollEmotes();
 				});
-			} else {
-				const votes = data.votes;
-				var optionwrap = $('<ul/>').appendTo($poll);
-				const options = data.options;
-				for (var i = 0; i < options.length; i++) {
-					var t = options[i].replace("&gt;", ">").replace("&lt;", "<");
-					var iw = $('<li/>').appendTo(optionwrap);
-					var row = $('<tr/>').appendTo($('<table/>').appendTo(iw));
-					var optionBtn = $('<div/>').addClass("btn").text(votes[i]).appendTo($('<td/>').appendTo(row));
-
-					if (data.obscure) {
-						optionBtn.addClass("obscure");
-					}
-
-					$('<div/>').addClass("label").text(t).appendTo($('<td/>').appendTo(row));
-					$('<div/>').addClass("clear").appendTo(iw);
-
-					optionBtn.data("op", i);
-					optionBtn.data("disabled", false);
-					optionBtn.click(function () {
-						var $this = $(this);
-						if (!$this.is('.disabled')) {
-							$(this).addClass('voted');
-						}
-						var d = $this.data("disabled");
-						if (!d) {
-							socket.emit("votePoll", {
-								op: $this.data("op")
-							});
-							$this.data("disabled", true);
-							optionwrap.find(".btn").addClass("disabled");
-						}
+			}
+			default: {
+				for (const opt of data.options) {
+					const btn = createElement('div', {
+						class: 'btn',
+						text: data.votes[opt - 1]
 					});
 
-					POLL_OPTIONS.push(t);
+					btn.classList.toggle('obscure', data.obscure);
+					
+					const item = 
+						createElement('div', {class: 'poll-row'}, 
+							btn,
+							createElement('span', {
+								text: opt.replace("&gt;", ">").replace("&lt;", "<")
+							})
+						);
+				
+					item.op = opt;
+					item.disabled = false;
+					
+					poll.append(item)
 				}
 			}
+		}
 
-			$("<div />")
-				.addClass("poll-auto-close")
-				.append(
-					$("<div />")
-						.addClass("poll-auto-close__time-left"),
-					$("<div />")
-						.addClass("poll-auto-close__progress-bar")
-						.append($("<div />")
-							.addClass("poll-auto-close__progress-bar-inner")))
-				.appendTo($poll);
+		/*
+		if (data.pollType == "ranked") {
+			$poll.addClass("ranked-poll");
+			onModuleLoaded(() => {
+				window.rankedPolls.createRankedPoll(data, $poll[0]);
+				updateRankedPollEmotes();
+			});
+		} else {
+			var optionwrap = $('<ul/>').appendTo($poll);
+			const options = data.options;
 
-			const $pollControl = $("<div />")
-				.addClass("poll-control")
-				.append(
-					$("<div />")
-						.addClass("poll-control__auto-close")
-						.append(
-							$("<select>")
-								.addClass("poll-control__auto-close__select")
-								.append($("<option />")
-									.attr("value", "")
-									.text("Set Poll Timer"))
-								.append($("<option />")
-									.attr("value", "0")
-									.text("Remove Timer"))
-								.append(
-									autoCloseTimes
-										.filter(([time]) => time > 0)
-										.map(([time, title]) => $(`<option />`)
-											.text(title)
-											.attr("value", time)))
-								.change(function () {
-									const $this = $(this);
-									const closeInSeconds = parseInt($this.val(), 10);
-									$this.val("");
 
-									socket.emit("updatePoll", {
-										id: data.id,
-										closePollInSeconds: closeInSeconds
-									});
-								}))
-				)
-				.appendTo($poll);
 
-			updatePollAutoClose($poll, data);
+			for (var i = 0; i < options.length; i++) {
+				var t = options[i].replace("&gt;", ">").replace("&lt;", "<");
+				var iw = $('<li/>').appendTo(optionwrap);
+				var row = $('<tr/>').appendTo($('<table/>').appendTo(iw));
+				var optionBtn = $('<div/>').addClass("btn").text(data.votes[i]).appendTo($('<td/>').appendTo(row));
 
-			if (canCreatePoll()) {
-				$pollControl.addClass("enabled");
+				if (data.obscure) {
+					optionBtn.addClass("obscure");
+				}
+
+				$('<div/>').addClass("label").text(t).appendTo($('<td/>').appendTo(row));
+				$('<div/>').addClass("clear").appendTo(iw);
+
+				optionBtn.data("op", i);
+				optionBtn.data("disabled", false);
+				optionBtn.click(function () {
+					if (this.disabled) {
+						return;
+					}
+
+					this.classList.add('voted');
+					this.disabled = true;
+
+					this.querySelector('.btn').classList.add('disabled');
+
+					socket.emit('votePoll', {
+						op: this.op
+					});
+				});
+
+				POLL_OPTIONS.push(t);
 			}
-		});
-	}
+		}
+		*/
+
+		/*
+		$("<div />")
+			.addClass("poll-auto-close")
+			.append(
+				$("<div />")
+					.addClass("poll-auto-close__time-left"),
+				$("<div />")
+					.addClass("poll-auto-close__progress-bar")
+					.append($("<div />")
+						.addClass("poll-auto-close__progress-bar-inner")))
+			.appendTo($poll);
+		*/
+		
+		const times = [
+			["", "Set Poll Timer"],
+			[0, "Remove Timer"],
+			...autoCloseTimes
+		];
+
+		const select = createElement('select', {},
+			...times.map(([time, name]) => {
+				return createElement('option', {
+					text: name,
+					value: time
+				});
+			})
+		);
+
+		select.addEventListener('change', function() {
+			if (!this.parentNode.previousSibling.classList.contains('poll-auto-close')) {
+				this.parentNode.insertAdjacentElement('beforebegin',
+					createElement('div', {class: 'poll-auto-close'},
+						createElement('div', {class: 'poll-auto-close__time-left'}),
+						createElement('div', {class: 'poll-auto-close__progress-bar'},
+							createElement('div', {
+								class: 'poll-auto-close__progress-bar-inner'
+							})
+						)
+					)
+				)
+			}
+
+			socket.emit("updatePoll", {
+				id: data.id,
+				closePollInSeconds: this.value
+			});
+
+			updatePollAutoClose($(this.closest('.poll')), data);
+
+			this.value = "";
+		})
+
+		poll.append(
+			createElement('div', {class: 'poll-control'}, 
+				select
+			)
+		);
+
+		/*
+		const $pollControl = $("<div />")
+			.addClass("poll-control")
+			.append(
+				$("<div />")
+					.addClass("poll-control__auto-close")
+					.append(
+						$("<select>")
+							.addClass("poll-control__auto-close__select")
+							.append($("<option />")
+								.attr("value", "")
+								.text("Set Poll Timer"))
+							.append($("<option />")
+								.attr("value", "0")
+								.text("Remove Timer"))
+							.append(
+								autoCloseTimes
+									.filter(([time]) => time > 0)
+									.map(([time, title]) => $(`<option />`)
+										.text(title)
+										.attr("value", time)))
+							.change(function () {
+								const $this = $(this);
+								const closeInSeconds = parseInt($this.val(), 10);
+								$this.val("");
+
+								socket.emit("updatePoll", {
+									id: data.id,
+									closePollInSeconds: closeInSeconds
+								});
+							}))
+			)
+			.appendTo($poll);
+		*/
+
+		
+
+		updatePollAutoClose($(poll), data);
+	});
+	
 }
 function updatePoll(data) {
 	const $poll = $(".poll.active");
@@ -1965,6 +2088,8 @@ function updatePoll(data) {
 		});
 	} else {
 		const votes = data.votes;
+		
+
 		$poll.find(".btn").each(function (key, val) {
 			$(val).text(votes[$(val).data("op")]);
 		});
@@ -1993,10 +2118,6 @@ function updatePollAutoClose($poll, data) {
 	const $progress = $poll.find(".poll-auto-close__progress-bar-inner");
 	const $timeLeft = $poll.find(".poll-auto-close__time-left");
 	const $autoClose = $poll.find(".poll-auto-close");
-
-	/*
-	const 
-	*/
 
 	if (data.closePollInSeconds > 0) {
 		$autoClose.addClass("enabled");
@@ -2351,7 +2472,7 @@ async function parseVideoURLAsync(url) {
 
 		let id = whole ? url : matches[1];
 
-		//this is a pain to integrate into a nice package (could with regex)
+		//this is a pain to integrate into a nice package
 		if (source === 'dash' && url.includes('watch.cloudflarestream.com')) {
 			id = `https://cloudflarestream.com/${id}/manifest/video.mpd`;
 		}
@@ -2381,7 +2502,7 @@ function formatChatMsg(msg, greentext = true) {
 function detectName(nick, msg) {
 	let list = HIGHLIGHT_LIST;
 	
-	if (nick) {
+	if (nick && nick.length > 0) {
 		list.push(nick);
 	}
 
@@ -2494,9 +2615,13 @@ function showChat(channel) {
 	ACTIVE_CHAT = channel;
 
 	/*
+
+	//handle hiding through CSS
 	document.body.setAttribute(
 		'channel', channel
 	);
+
+	
 	*/
 
 	$('.chatbuffer').addClass('inactive');

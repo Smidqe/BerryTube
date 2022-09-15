@@ -1,6 +1,7 @@
 exports.Video = class {
 	constructor(data) {
-		this.videoid = data.videoid;
+		//videoid can also be number :(, therefore cast it to string
+		this.videoid = `${data.videoid}`;
 		this.videotitle = data.videotitle;
 		this.videolength = data.videolength;
 		this.videotype = data.videotype;

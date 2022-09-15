@@ -10,6 +10,13 @@ exports.NormalPoll = class extends PollInstance {
 			obscure: this.options.isObscured,
 			ghost: false,
 			pollType: this.options.pollType,
+			options2: this.options.options.map(o => {
+				return {
+					isTwoThirds: o.isTwoThirds,
+					text: o.text
+				};
+			}),
+			sort: this.options.sort,
 			options: this.options.options.map(o => (o.isTwoThirds ? `${o.text} (⅔ required)` : o.text)),
 			votes: this.votes.reduce(
 				(arr, vote) => {

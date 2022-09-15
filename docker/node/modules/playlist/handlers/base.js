@@ -46,8 +46,11 @@ exports.Handler = class {
 				videoid = ${video.id()}
 		`;
 
+		const playlist = services.playlist;
+		const activeIndex = playlist.indexOf((video) => video.id() === services.active.id());
+		const index = data.queue ? activeIndex + 1 : playlist.length;
 		const params = [
-			services.playlist.length, 
+			index, 
 			video.id(), 
 			video.title(), 
 			video.duration(), 
@@ -56,21 +59,25 @@ exports.Handler = class {
 			JSON.stringify(video.metadata())
 		];
 
-
 		await services.db.query(
 			[`insert into ${config.video_table} (position, videoid, videotitle, videolength, videotype, videovia, meta) VALUES (?,?,?,?,?,?,?);`],
 			...params
 		);
 
-
-		//add to actual playlist
-		if (!data.queue || !services.playlist.length) {
-			services.playlist.append(video);
-		} else {
-			services.playlist.insertAfter(services.active, video);
+		if (data.queue) {
+			await services.db.query`
+				update videos set position = position + 1 where not videoid = ${video.id()} and position >= ${index}
+			`;
 		}
 
-		services.io.sockets.emit('addVideo', {queue: data.queue, video: video.pack(), sanityid: services.active.videoid});
+		//add to actual playlist
+		if (!data.queue || !playlist.length) {
+			playlist.append(video);
+		} else {
+			playlist.insertAfter(services.active, video);
+		}
+
+		services.io.sockets.emit('addVideo', {queue: data.queue, video: video.pack(), sanityid: services.active.id()});
 	
 		return video;
 	}

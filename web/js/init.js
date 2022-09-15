@@ -864,11 +864,9 @@ function showEditNote(nick) {
 		center: true
 	});
 
-
-
 	var mainOptWrap = $('<div/>').appendTo(parent).addClass('controlWindow');
 	$('<p>').appendTo(mainOptWrap).text("Editing note for " + nick + ":").css("width", "300px");
-	var input = $('<textarea>').appendTo(mainOptWrap).css("width", "300px").attr('rows', 20).val($(`#chatlist li[nick="${nick}"]`).data('note'));
+	var input = $('<textarea>').appendTo(mainOptWrap).css("width", "300px").attr('rows', 20).val(CHATLIST.get(nick).note);
 	var buttonDiv = $('<div/>').css("text-align", "center").appendTo(mainOptWrap);
 	var cancelBtn = $('<div/>').addClass('button').appendTo(buttonDiv);
 	$('<span/>').appendTo(cancelBtn).text("Cancel");
@@ -910,7 +908,7 @@ function addUser(data, sortafter, animate = false) {
 	const classes = [
 		['me', data.nick === NAME],
 		['ignored', IGNORELIST.includes(data.nick)],
-		['sbanned', data.shadowbanned],
+		['sbanned', !!data.shadowbanned],
 		[typeMappings.get(data.type), true]
 	];
 
@@ -1083,7 +1081,6 @@ function moveToRCV(overlay, node, time) {
 
 	const timeout = createElement('div', {class: 'rmTimer'});
 
-	//node.show('blind');
 	node.style.display = 'block';
 	node.querySelector('.message')?.append(
 		timeout
@@ -1173,20 +1170,20 @@ function initPlaylistControls(plwrap) {
 	vqBtn.click(async function () {
 		let btn = $(this);
 
-		await attemptQueue($(videoImport).val(), false).then(() => {
-			btn.data('revertTxt', "Q");
-			btn.text('').addClass("loading");
-		})
+		btn.data('revertTxt', "Q");
+		btn.text('').addClass("loading");
+
+		await attemptQueue($(videoImport).val(), false);
 	});
 
 	var vvBtn = $('<div id="addVolatButton"/>').addClass("impele").addClass("btn").text("V").appendTo(container);
 	vvBtn.click(async function () {
 		let btn = $(this);
 
-		await attemptQueue($(videoImport).val(), true).then(() => {
-			btn.data('revertTxt', "Q");
-			btn.text('').addClass("loading");
-		})
+		btn.data('revertTxt', "V");
+		btn.text('').addClass("loading");
+
+		await attemptQueue($(videoImport).val(), true);
 	});
 
 	videoImport.keyup(function (e) { if (e.keyCode == 13) { vvBtn.click(); } });
@@ -1249,9 +1246,16 @@ function initMultiqueue(){
 		}
 	`;
 
+
+
 	const $import = $(".import .misc.btn").parent();
 	const $inputContainer = $import;
 	const $btnContainer = $inputContainer.parent();
+
+	const input = createElement('div',  {class: 'mq-controls mq-container hidden'},
+		createElement('div', {class: 'mq-controls mq-misc btn mq-queue-button'})
+	)
+
 	const $multiInputDiv = $('<div class="mq-controls multi-queue-container hidden"></div>');
 	const $multiInputQueueBtn = $(
 		'<button class="mq-controls misc btn multi-queue-button">Queue</button>'
@@ -1866,11 +1870,6 @@ async function initLoginForm(headbar) {
 	});
 }
 function initDrinkCounter() {
-	const elements = [
-		document.querySelector('#videobg'),
-		document.querySelector('#videowrap')
-	]
-
 	const wrap = createElement('div', {id: 'drinkWrap', class: 'hidden'}, 
 		createElement('div', {id: 'v', class: 'hidden'}),
 		createElement('span', {}, 
@@ -1880,7 +1879,8 @@ function initDrinkCounter() {
 		)
 	);
 
-	(elements[0] || elements[1]).append(
+
+	document.querySelector('#videobg').append(
 		wrap
 	);
 }
@@ -1909,87 +1909,36 @@ function addPollOpt(to, optionCount) {
 	)
 }
 function initPolls(under) {
-	const chat = createElement('div', {id: 'pollpane'});
-	const newButton = createElement('div', {id: 'pc-control-new', class: 'btn', text: 'New Poll'});
-	const closeButton = createElement('div', {id: 'pc-control-close', class: 'btn', text: 'Close Active Poll'});
+	$("#pollpane").remove();
+	var chatpane = $('<div id="pollpane"/>').insertAfter(under);
 
-	const controls = createElement('div', {id: 'pollControl'},
-		createElement('table', {class: 'mainbtns'}, 
-			createElement('tr', {}, 
-				createElement('td', {},
-					newButton
-				),
-				createElement('td', {},
-					closeButton
-				)
-			)
-		),
-		createElement('div', {class: 'clear'}),
-		createElement('div', {id: 'pc-control-canvas', class: 'options'})
-	)
+	// Poll Controls
+	var pollControl = $('<div/>').attr('id', 'pollControl').insertBefore(chatpane);
+	var btns = $('<table/>').appendTo(pollControl).addClass("mainbtns");
+	var row = $('<tr/>').appendTo(btns);
+	var newPollBtn = $('<div/>').addClass("btn").text("New Poll").appendTo($('<td/>').appendTo(row));
+	var endPollBtn = $('<div/>').addClass("btn").text("Close Active Poll").appendTo($('<td/>').appendTo(row));
+	var canvas = $('<div/>').addClass("options").appendTo(pollControl);
 
-	newButton.onclick = function() {
-		const canvas = controls.lastChild;
-		const jq = $(canvas);
+	$("<div/>").addClass("clear").insertAfter(btns);
 
-		if (canvas.style.display !== 'block') {
-			jq.show("blind");
-			newButton.textContent = "Cancel";
+	newPollBtn.click(function () {
+		if (canvas.is(":hidden")) {
+			canvas.show("blind");
+			newPollBtn.text("Cancel");
 		} else {
-			jq.hide("blind");
-			newButton.textContent = "New Poll";
+			canvas.hide("blind");
+			newPollBtn.text("New Poll");
 		}
-	}
-	closeButton.onclick = () => {
+	});
+
+	endPollBtn.click(function () {
 		if (canClosePoll()) {
 			socket.emit("closePoll");
 		}
-	}
+	});
 
-	chat.append(
-		controls
-	);
-	under[0].after(
-		chat
-	);
-
-	/*
-	const table = createElement('table', {}, 
-		createElement('tr', {},
-			createElement('td', {},
-				createElement('label', {text: 'Poll Title'})
-			),
-			createElement('td', {class: 'optionWrap'}, 
-				createElement('input', {type: 'text'})
-			),
-			createElement('td', {},
-				createElement('input', {class: 'cb', type: 'checkbox', title: 'Obscure votes until poll closes.', checked: true})
-			),
-		),
-		createElement('tr', {},
-			createElement('td'),
-			createElement('td', {},
-				createElement('div', {class: 'btn', text: 'New Option'})
-			),
-			createElement('td', {},
-				createElement('div', {class: 'btn', text: '+5'})
-			),
-		),
-		createElement('tr', {class: 'c-poll-select'},
-			createElement('td', {}),
-			createElement('td', {},
-				createElement(
-					'select', {class: 'c-poll-select__select'},
-					...autoCloseTimes.map(([time, title]) => createElement('option', {selected: time === 0, text: title, value: time}))
-				)
-			)
-		)
-
-
-	);
-	*/
-
-	var table = $('<table/>').appendTo(controls.lastChild);
+	var table = $('<table/>').appendTo(canvas);
 
 	// Title Row
 	var row = $('<tr/>').appendTo(table);
@@ -2019,13 +1968,18 @@ function initPolls(under) {
 	var td = $('<td/>').appendTo(row);
 	var newOptionManyBtn = $('<div/>').addClass("btn").text("+5").appendTo(td);
 
+	// Automatic Close Row
+	const automaticClose = $("<select />")
+		.addClass("c-poll-select__select")
+		.append(autoCloseTimes
+			.map(([time, title]) => $(`<option />`)
+				.attr("selected", time === 0)
+				.text(title)
+				.attr("value", time)))
+		.appendTo(td);
 
-	const automaticClose = $(createElement(
-		'select', {class: 'c-poll-select__select'},
-		...autoCloseTimes.map(([time, title]) => createElement('option', {selected: time === 0, text: title, value: time}))
-	));
-
-	$("<tr />", {class: 'c-poll-select'})
+	$("<tr />")
+		.addClass("c-poll-select")
 		.append($("<td />"))
 		.append($("<td />").append(automaticClose))
 		.appendTo(table);
@@ -2055,7 +2009,7 @@ function initPolls(under) {
 	var createRunoffBtn = $('<div/>').addClass('btn').text('Create Runoff').appendTo(td);
 
 	var td = $('<td/>').appendTo(row);
-	var x = $('<div/>').appendTo(td).addClass('optionWrap');
+	var x = $('<div/>').appendTo(td).addClass('optionWrap').css('width', '30px');
 	var runoffThreshold = $('<input/>').attr('type', 'text').attr('title', 'Vote threshold for the runoff.').appendTo(x);
 
 	// Init
@@ -2068,54 +2022,49 @@ function initPolls(under) {
 	});
 
 	createPollBtn.click(() => createPoll("normal"));
+
 	createRankedPollBtn.click(() => createPoll("ranked"));
+
 	createRunoffBtn.click(function () {
 		if (!canCreatePoll()) {
 			return;
 		}
-
-		var threshold = parseInt(runoffThreshold.val(), 10);
-
-		if (isNaN(threshold)) {
-			return;
-		}
-
-
-
-		var ops = [];
-		$('.poll.active tr').each(function (index, elem) {
-			var $elem = $(elem);
-			var count = parseInt($elem.find('.btn').text());
-			if (!isNaN(count) && count >= threshold) {
-				const label = POLL_OPTIONS[index];
-				const isTwoThirds = label.endsWith(' (⅔ required)');
-				const text = isTwoThirds ? label.substr(0, label.length - ' (⅔ required)'.length) : label;
-				ops.push({ text, isTwoThirds });
+		if (canCreatePoll()) {
+			var threshold = parseInt(runoffThreshold.val());
+			if (isNaN(threshold)) {
+				return;
 			}
-		});
 
-		/*
-		const ops = [];
-
-		for
-		*/
-
-		if (ops.length > 0) {
-			socket.emit('newPoll', {
-				title: newPollTitle.val(),
-				obscure: newPollObscure.is(":checked"),
-				ops: ops,
-				closePollInSeconds: parseInt(automaticClose.val()),
+			var ops = [];
+			$('.poll.active tr').each(function (index, elem) {
+				var $elem = $(elem);
+				var count = parseInt($elem.find('.btn').text());
+				if (!isNaN(count) && count >= threshold) {
+					const label = POLL_OPTIONS[index];
+					const isTwoThirds = label.endsWith(' (⅔ required)');
+					const text = isTwoThirds ? label.substr(0, label.length - ' (⅔ required)'.length) : label;
+					ops.push({ text, isTwoThirds });
+				}
 			});
-			newPollTitle.val('');
-			runoffThreshold.val('');
-			canvas.find('.option').parent().remove();
-			addPollOpt(optionContainer, 2);
-			newPollObscure.prop('checked', true);
-			newPollBtn.click();
-		}
 
+			if (ops.length > 0) {
+				socket.emit('newPoll', {
+					title: newPollTitle.val(),
+					obscure: newPollObscure.is(":checked"),
+					ops: ops,
+					closePollInSeconds: parseInt(automaticClose.val()),
+				});
+				newPollTitle.val('');
+				runoffThreshold.val('');
+				canvas.find('.option').parent().remove();
+				addPollOpt(optionContainer, 2);
+				newPollObscure.prop('checked', true);
+				newPollBtn.click();
+			}
+		}
 	});
+
+	$('<div/>').css("clear", 'both').appendTo(pollControl);
 
 	function createPoll(pollType = "normal") {
 		if (!canCreatePoll()) { return; }
@@ -2143,9 +2092,6 @@ function initPolls(under) {
 	}
 
 	function getOptions() {
-		console.warn(
-			canvas
-		)
 		const opWraps = canvas[0].querySelectorAll(".optionWrap");
 		const ret = [];
 

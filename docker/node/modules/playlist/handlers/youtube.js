@@ -13,7 +13,7 @@ exports.YoutubeHandler = class extends Handler {
 	getGeoblockedCountries(restrictions) {
 		//not blocked anywhere
 		if (!restrictions || !restrictions.blocked && !restrictions.allowed) {
-			return false;
+			return null;
 		}
 
 		const geoblock = {
@@ -25,7 +25,7 @@ exports.YoutubeHandler = class extends Handler {
 
 		//viewable everywhere
 		if (restrictions.blocked && restrictions.blocked.length === 0) {
-			return false;
+			return null;
 		}
 
 		//blacklist
@@ -72,7 +72,7 @@ exports.YoutubeHandler = class extends Handler {
 			ageblock: video.contentDetails.contentRating.ytRating === 'ytAgeRestricted'
 		};
 
-		if (!data.force && Object.values(restrictions).some(value => typeof value !== "boolean" || value)) {
+		if (!data.force && Object.values(restrictions).some(value => value)) {
 			links.socket.emit("videoRestriction", restrictions);
 			throw new Error(`[Youtube]: Video ${data.videoid} has visibility restrictions`);
 		}

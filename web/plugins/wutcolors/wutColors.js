@@ -5,7 +5,7 @@ Object.defineProperty(Array.prototype, "wutUniquefyArray", {
     var newarr = [];
     this.forEach(function(k){
       if(newarr.indexOf(k) < 0 && k!== "")
-        newarr.push(k);
+        {newarr.push(k);}
     });
     return newarr;
   }
@@ -34,7 +34,7 @@ function wutInvertObject(a){
 
 var wutHasDarkBG = false;
 function wutRefreshLight(color){
-  var regex = /(\w+)\((\d+),\s*(\d+\%?),\s*(\d+\%?)(?:,\s*([\d\.]+))?\)/;
+  var regex = /(\w+)\((\d+),\s*(\d+%?),\s*(\d+%?)(?:,\s*([\d.]+))?\)/;
   var values = regex.exec(color);
 
   switch(values[1]){
@@ -50,7 +50,7 @@ function wutRefreshLight(color){
 }
 
 function wutLightenColor(color){
-  var regex = /(\w+)\((\d+),\s*(\d+)\%?,\s*(\d+)\%?(?:,\s*(\d+))?\)/;
+  var regex = /(\w+)\((\d+),\s*(\d+)%?,\s*(\d+)%?(?:,\s*(\d+))?\)/;
   var values = regex.exec(color);
   if(values[1] === 'hsla'){
     return values[1]+"("+values[2]+", "+values[3]+"%, "+(100-values[4])+"%, 1)";
@@ -59,7 +59,7 @@ function wutLightenColor(color){
 }
 
 function wutGetUsercolor(nick){
-  var h,s,l,a,c;
+  var c;
   if( wutUserColors && !wutUserColors[nick] && AtteNicks && AtteNicks[nick] ){
     //console.log("wutColors: Found alternate nick for "+ nick +": "+AtteNicks[nick]);
     nick = AtteNicks[nick];
@@ -68,13 +68,16 @@ function wutGetUsercolor(nick){
   if( wutUserColors && wutUserColors[nick] && wutUserColors[nick].color ){
     c = wutUserColors[nick].color;
   }else{
-    h = Math.abs(wutHashCode(nick))%360
-      , s = Math.abs(wutHashCode(nick))%25 + 70
-      , l = Math.abs(wutHashCode(nick))%15 + 35
-      , a = 1
-      , c = "hsla("+h+","+s+"%,"+l+"%,"+a+")"
-      ;
+	const hash = Math.abs(wutHashCode(nick));
+
+	c = `hsla(
+		${hash % 360},
+		${hash % 25 + 70}%,
+		${hash % 15 + 35}%,
+		${1}
+	)`;
   }
+
   return (wutHasDarkBG?wutLightenColor(c):c);
 }
 
@@ -145,6 +148,7 @@ function wutReloadUserColors(){
 			wutStyleSheet.insertRule("#wutColorRefresh:hover { opacity: 1; }",0);
 			wutStyleSheet.insertRule("#wutColorRefresh > img { width: 16px; height: 16px; }",0);
 	  
+			
 			
 			var chatUsers = $('span.nick').text().split(':').concat(
 			  $('span.chatlistname').toArray().map(function(k){

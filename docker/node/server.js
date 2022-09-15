@@ -233,6 +233,20 @@ LinkedList.Circular.prototype.each = function(cb) {
 	}
 }
 
+LinkedList.Circular.prototype.indexOf = function(cb) {
+	let video = this.first;
+
+	for (let i = 0; i < this.length; i++) {
+		if (cb(video, i)) {
+			return i;
+		}
+
+		video = video.next;
+	}
+
+	return -1;
+}
+
 
 /* VAR INIT */
 SERVER.PLAYLIST = new LinkedList.Circular();
@@ -246,7 +260,6 @@ SERVER.OUTBUFFER = {};
 SERVER.BANS = [];
 SERVER.FILTERS = [];
 SERVER.DRINKS = 0;
-SERVER.FAILED_LOGINS = [];
 SERVER.RECENTLY_REGISTERED = new Map();
 
 // sets where our log output goes for our default logger...
@@ -297,6 +310,14 @@ async function initPlaylist(callback) {
 	}
 
 	SERVER.ACTIVE = SERVER.PLAYLIST.first;
+
+	SERVER.PLAYLIST.each(async (video, index) => {
+		await databaseService.query`
+			update videos set position = ${index} where videoid = ${video.id()}
+		`;
+	}); 
+
+
 	if (callback) { callback(); }
 }
 function initResumePosition(callback) {
@@ -395,39 +416,33 @@ function initTimer() {
 
 		const timestamp = (new Date()).getTime();
 		const elapsedMilliseconds = (timestamp - SERVER._TIME);
-		const elapsedSeconds = elapsedMilliseconds / 1000;
+		const elapsedSeconds = elapsedMilliseconds / 1000
+
 		SERVER._TIME = timestamp;
 
 		for (const service of services) {
 			service.onTick(elapsedMilliseconds);
 		}
 
-		
+		if (!SERVER.LIVE_MODE && SERVER.STATE !== 2) {
+			const hbInterval = (SERVER.settings.core.heartbeat_interval / 1000);
 
-		if (Math.ceil(SERVER.TIME + 1) >= (SERVER.ACTIVE.duration() + SERVER.settings.vc.tail_time)) {
-			playNext();
-		} else if (SERVER.STATE != 2) {
-			if (isTrackingTime()) {
-				SERVER.TIME += elapsedSeconds;
-			} else {
-				resetTime();
+			//only beat on different seconds
+			const beat = Math.floor(SERVER.TIME + elapsedSeconds) > Math.floor(SERVER.TIME);
+
+			if (Math.ceil(SERVER.TIME + 1) >= (SERVER.ACTIVE.duration() + SERVER.settings.vc.tail_time)) {
+				playNext();
+				return;
 			}
-		}
 
-
-	}, 1000);
-
-
-	setInterval(function () {
-		if (isTrackingTime()) {
-			if ( // This should prevent the crazy jumping to end/beginning on video change.
-				(SERVER.ACTIVE.duration() - SERVER.TIME > (SERVER.settings.core.heartbeat_interval / 1000)) &&
-				(SERVER.TIME > (SERVER.settings.core.heartbeat_interval / 1000))
-			) {
+			if (beat && SERVER.TIME > 0 && Math.floor(SERVER.TIME) % hbInterval === 0) {
 				sendStatus("hbVideoDetail", io.sockets);
+				upsertMisc({ name: 'server_time', value: '' + Math.ceil(SERVER.TIME) });
 			}
+
+			SERVER.TIME += elapsedSeconds;
 		}
-	}, SERVER.settings.core.heartbeat_interval);
+	}, 1000);
 }
 async function initAreas() {
 	const {result} = await databaseService.query`
@@ -447,17 +462,14 @@ async function sendAreas(socket) {
 
 	socket.emit("setAreas", areas);
 }
-function removeBlacklistedHTML(content) {
-	return content.replace(
+
+/* Grumble, the regex above makes my syntax highlighter lose its mind. Putting this here to end the madness. */
+async function setAreas(areaname, content) {
+	// Just for the 8-year olds
+	content = content.replace(
 		regexes.htmlBlacklist,
 		"&lt;$1$2&gt;"
 	);
-}
-/* Grumble, the regex above makes my syntax highlighter lose its mind. Putting this here to end the madness. */
-async function setAreas(areaname, content) {
-
-	// Just for the 8-year olds
-	content = removeBlacklistedHTML(content);
 
 	SERVER.AREAS.set(areaname, content);
 
@@ -485,6 +497,8 @@ function sendStatus(name, target) {
 		time: Math.round(SERVER.TIME),
 		state: SERVER.STATE
 	});
+
+
 }
 function doorStuck(socket) {
 	socket.emit("recvNewPlaylist", SERVER.PLAYLIST.toArray());
@@ -550,7 +564,14 @@ function isUserBanned(o) {
 	for (elem in required) { if (!(required[elem] in o)) return; }
 
 	prepareBans();
+
+	/*
+	const ban = SERVER.BANS.
+	*/
+
 	for (bannedguy in SERVER.BANS) {
+
+
 
 		// Check all IP's
 		for (ip in o.ips) {
@@ -595,39 +616,10 @@ function kickForIllegalActivity(socket, reason) {
 function kickUserByNick(socket, nick, reason) {
 	sessionService.forNick(nick, session => session.kick(reason, getSocketName(socket)));
 }
-var commit = function () {
-	SERVER.PLAYLIST.each((video, index) => {
-		databaseService.query`
-			update videos set position = ${index} where videoid = ${video.id()}
-		`;
-	});
-
-	const shadowbant = Object.values(sessionService.ipAddresses)
-		.reduce((acc, entry) => {
-			if (!entry.isShadowbanned) {
-				return acc;
-			}
-
-			acc.push({
-				ip: entry.ip,
-				temp: this.isTempShadowban
-			});
-
-			return acc;
-		}, []);
-
-	upsertMisc({ name: 'shadowbant_ips', value: JSON.stringify(shadowbant) });
-	upsertMisc({ name: 'hardbant_ips', value: JSON.stringify(SERVER.BANS) });
-	upsertMisc({ name: 'server_time', value: '' + Math.ceil(SERVER.TIME) });
-	upsertMisc({ name: 'server_active_videoid', value: '' + SERVER.ACTIVE.id() });
-};
-
-const commitInterval = setInterval(commit, SERVER.settings.core.db_commit_delay);
 
 process.on('SIGTERM', function (signal) {
-	clearInterval(commitInterval);
 	io.sockets.emit('serverRestart');
-	commit();
+	
 	setTimeout(function () {
 		process.exit(128 + signal);
 	}, 3000);
@@ -636,7 +628,7 @@ function setServerState(state) {
 	SERVER.STATE = state;
 }
 function getCommand(msg) {
-	var re = new RegExp("^/([a-zA-Z]*)([-0-9.]*)\\s*(.*)", "i");
+	var re = new RegExp("^/([a-zA-Z]*)([\d-0-9.]*)\\s*(.*)", "i");
 	var parsed = { msg: msg, command: false, multi: 1 };
 	if (ret = msg.match(re)) {
 		parsed.command = ret[1].toLowerCase();
@@ -667,6 +659,9 @@ function handleNewVideoChange() {
 	if (SERVER.LIVE_MODE) {
 		SERVER.STATE = 1;
 	}
+
+	upsertMisc({ name: 'server_time', value: `${Math.ceil(SERVER.TIME)}` });
+	upsertMisc({ name: 'server_active_videoid', value: `${SERVER.ACTIVE.id()}` });
 }
 function sendDrinks(socket) {
 	socket.emit("drinkCount", {
@@ -694,9 +689,6 @@ function addDrink(amount, socket) {
 	sendDrinks(io.sockets);
 }
 
-function validateFilter(filter) {
-
-}
 function applyFilters(nick, msg, socket) {
 	var actionChain = [];
 	const filterCount = SERVER.FILTERS.length;
@@ -839,6 +831,8 @@ function banUser(data, mod = undefined) {
 	for (const nick of data.nicks) {
 		sessionService.forNick(nick, s => s.kick("You have been banned."));
 	}
+
+	upsertMisc({ name: 'hardbant_ips', value: JSON.stringify(SERVER.BANS) });
 }
 
 /* ================= */
@@ -1245,10 +1239,11 @@ async function delVideo(video, position, sanity, socket) {
 	DefaultLog.info(events.EVENT_ADMIN_DELETED_VIDEO,
 		"{mod} deleted {title}",
 		{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()) });
-}
 
-function isTrackingTime() {
-	return !SERVER.LIVE_MODE;
+	//update positions
+	await databaseService.query`
+		update videos set position = position - 1 where position > ${position}
+	`;
 }
 
 async function setUserNote(data) {
@@ -1681,6 +1676,13 @@ io.sockets.on('connection', function (ioSocket) {
 		DefaultLog.info(events.EVENT_ADMIN_MOVED_VIDEO,
 			"{mod} moved {title}",
 			{ mod: getSocketName(socket), title: decodeURIComponent(from.title()), type: "playlist" });
+
+		//TODO: Optimize, we don't need to update all indexes
+		SERVER.PLAYLIST.each((video, index) => {
+			databaseService.query`
+				update videos set position = ${index} where videoid = ${video.id()}
+			`;
+		});
 	});
 	socket.on("forceVideoChange", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
@@ -1744,7 +1746,6 @@ io.sockets.on('connection', function (ioSocket) {
 			...serviceLocator,
 		};
 
-		
 		if (!VideoHandlers.has(data.videotype)) {
 			DefaultLog.error(
 				events.EVENT_ADMIN_ADDED_VIDEO,
@@ -1756,7 +1757,7 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
-		VideoHandlers.get(data.videotype).handle(links, data).then((video) => {
+		VideoHandlers.get(data.videotype).handle(links, data).then(async (video) => {
 			DefaultLog.info(
 				events.EVENT_ADMIN_ADDED_VIDEO,
 				"{mod} added {provider} video {title}",
@@ -1907,6 +1908,22 @@ io.sockets.on('connection', function (ioSocket) {
 		} else {
 			sessionService.setShadowbanForNick(targetNick, false);
 		}
+
+		const shadowbant = Object.values(sessionService.ipAddresses)
+			.reduce((acc, entry) => {
+				if (!entry.isShadowbanned) {
+					return acc;
+				}
+
+				acc.push({
+					ip: entry.ip,
+					temp: this.isTempShadowban
+				});
+
+				return acc;
+			}, []);
+
+		upsertMisc({ name: 'shadowbant_ips', value: JSON.stringify(shadowbant) });
 	});
 	socket.on("setAreas", function (data) {
 		if (!authService.can(socket.session, actions.ACTION_SET_AREAS)) {
@@ -1914,15 +1931,11 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
-		areaname = data.areaname;
-		content = data.content;
-
 		DefaultLog.info(events.EVENT_ADMIN_EDITED_AREA,
 			"{mod} edited {area}",
-			{ mod: getSocketName(socket), type: "site", area: areaname });
+			{ mod: getSocketName(socket), type: "site", area: data.areaname });
 
-		
-		setAreas(areaname, content);
+		setAreas(data.areaname, data.content);
 	});
 	socket.on("fondleVideo", function (data) {
 		const video = SERVER.PLAYLIST.at(data.info.pos);

@@ -26,15 +26,18 @@ exports.DatabaseService = class extends ServiceBase {
 			password: config.mysql_pass,
 		});
 
+		//can't use this 
+		let self = this;
+
 		this.connection.on("error", function(err) {
-			this.log.error(
+			self.log.error(
 				events.EVENT_DB_CONNECTION,
 				"the database connection threw an error: attempting reconnect",
 				{},
 				err,
 			);
 			setTimeout(function() {
-				this.init();
+				self.init();
 			}, 1000);
 		});
 
@@ -44,20 +47,15 @@ exports.DatabaseService = class extends ServiceBase {
 	query(queryParts, ...params) {
 		return new Promise((res, rej) => {
 			const sql = queryParts.join(" ? ");
-			this.log.info(events.EVENT_DB_QUERY, '{sql}. {params}', { sql, params });
+			
 			this.connection.query(sql, params, (err, result, fields) => {
 				if (err) {
-					rej(err);
 					this.log.error(events.EVENT_DB_QUERY, 'query "{sql}" failed', { sql }, err);
-					return;
+					rej(err);
 				}
 
 				res({ result, fields });
 			});
 		});
-	}
-
-	upsert(table, values) {
-		
 	}
 };

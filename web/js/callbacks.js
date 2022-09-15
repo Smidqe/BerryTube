@@ -35,7 +35,7 @@ socket.on("createPlayer", function (data) {
 	const isNew = ACTIVE.videoid != data.video.videoid;
 
 	unfuckPlaylist();
-	setPlaylistPosition(data, true);
+	setPlaylistPosition(data);
 
 	// avoid skipping on socket reconnects, by not reloading current video
 	if (isNew) {
@@ -43,7 +43,7 @@ socket.on("createPlayer", function (data) {
 	}
 });
 socket.on("renewPos", function (data) {
-	setPlaylistPosition(data, true);
+	setPlaylistPosition(data);
 });
 socket.on("recvNewPlaylist", function (data) {
 	PLAYLIST = new LinkedList.Circular();
@@ -88,6 +88,7 @@ socket.on("hbVideoDetail", function (data) {
 	const accuracy = getStorage('syncAccuracy'); 
 	const flags = {
 		play: false,
+		pause: false,
 		seek: [false, -1]
 	};
 
@@ -113,8 +114,6 @@ socket.on("hbVideoDetail", function (data) {
 		if (flags.pause) {
 			PLAYER.pause();
 		}
-
-		if (data.state === 2)
 
 		if (flags.seek[0] && time !== -1) {
 			PLAYER.seek(flags.seek[1]);
@@ -239,7 +238,10 @@ socket.on("newChatList", function (data) {
 	initChatList(data);
 });
 socket.on("userJoin", function (data) {
-
+	console.warn(
+		"is chatlist initied?",
+		getVal('chatlistInitialised')
+	);
 	
 	if (getVal('chatlistInitialised')) {
 		addUser(data, true, data.nick !== NAME);
@@ -284,21 +286,18 @@ socket.on("numConnected", function (data) {
 socket.on(
 	"leaderIs",
 	data => {
-		// Keep trying to set until you do.
-		if (data.nick == false) {
-			// server is leading.
-			$("#chatlist ul li").removeClass("leader");
-			return;
+		for (const user of CHATLIST.values()) {
+			user.dom.classList.remove('leader');
 		}
 
-		whenExists("#chatlist ul li", function (obj) {
-			$(obj).removeClass("leader");
-			$(obj).each(function (key, val) {
-				if (data.nicks.includes(val.getAttribute("nick"))) {
-					$(val).addClass("leader");
-				}
-			});
-		});
+		// Keep trying to set until you do.
+		if (data.nick == false) {
+			return;
+		}
+		
+		for (const nick of data.nicks) {
+			CHATLIST.get(nick).dom.classList.add('leader');
+		}
 
 		if (sortUserList) {
 			sortUserList();
@@ -368,14 +367,19 @@ socket.on("debug", function (data) {
 socket.on('reconnecting', () => { onSocketReconnecting('reconnecting'); });
 function onSocketReconnecting(from) {
 	// The socket disconnected and is trying to reconnect; display a message indicating it
-	if ($('.chatbuffer .reconnecting').length == 0) {
+	const chat = document.querySelector('#chatbuffer');
+
+	if (!chat.querySelector('.reconnecting')) {
 		let msg = 'Connection lost. Attempting to reconnect...';
 		if (from === 'serverRestart') {
 			msg = 'Server is restarting... Reconnecting soon!';
 		}
 
-		$('.chatbuffer').append($('<div/>').addClass('reconnecting').text(msg));
-		$('#chatinput input').prop('disabled', true);
+		chat.append(
+			createElement('div', {class: 'reconnecting', text: msg})
+		);
+
+		chat.parentElement.querySelector('input').disabled = true;
 		scrollBuffersToBottom();
 	}
 
@@ -585,7 +589,8 @@ socket.on('shitpost', function (data) {
 			}, 1500 + 100);
 			break;
 		case 'ikea':
-			const target = $(`#chatbuffer .msgwrap[data-uuid=${data.randomMessage}] .msg`).filter(':not(.ikea)')[0];
+			const target = document.querySelector(`.msgwrap[data-uuid=${data.randomMessage}] .msg:not(.ikea)`);
+
 			if (!target) {
 				return;
 			}
