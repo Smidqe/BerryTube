@@ -42,4 +42,36 @@ settings.vc.head_time = 3; // seconds
 // Init API keys
 settings.apikeys.youtube = process.env.YOUTUBE_APIKEY;
 
+const settings2 = {
+	core: {
+		version: "2.1.0",
+		nodeport: 8344, // the server listening port.
+		log_file_name: "bt.log",
+		error_file_name: "error_bt.log",
+		debug_file_name: "debug.log",
+		max_saved_buffer: 30, // # of saved messages in chatlog sent to people who join.
+		db_commit_delay: 1000 * 60 * 10, // ms
+		heartbeat_interval: 10000, // ms
+		max_connections_per_ip: 100,
+		auto_volatile: 600, // Seconds
+		spamhp: 15000, // ms
+		spamcompare: 3000, // ms
+		max_chat_size: 400, // characters
+		temp_ban_duration: 1000 * 60 * 60 * 12, // ms
+		login_fail_duration: 1000 * 60 * 10, // ms
+		max_failed_logins: 10, // Number of times an IP can password fail before getting locked out.
+		register_cooldown: 1000 * 60 * 30, //ms
+		country_restriction_ignored: ['DE', 'IL', 'DK'], // Some countries are particularly restrictive, ignore them.
+		country_allow_required: ['GB', 'CA', 'US'], // Required countries if we have an allow list instead of a deny list
+		bcrypt_rounds: 10,
+	},
+	toggles: {
+		bestponi: [false,'Best Poni'],
+		wobniar: [false,'wobniaR'],
+		mutegray: [false,'Mute Greynames'],
+		allowreg: [true,'Allow Registration'],
+		spaceaids: [true,'Bans are Contagious'],
+	}
+};
+
 module.exports = settings;

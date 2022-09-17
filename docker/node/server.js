@@ -12,7 +12,6 @@ const { EventServer } = require("./modules/event-server");
 var SERVER = {};
 SERVER.settings = require('./bt_data/settings.js');
 SERVER.ponts = require('./bt_data/ponts.js');
-SERVER.dbcon = require('./bt_data/db_info.js');
 SERVER.nick_blacklist = require('./bt_data/nick_blacklist.js');
 
 const eventServer = new EventServer(SERVER.settings.core.nodeport);
@@ -424,6 +423,7 @@ function initTimer() {
 			service.onTick(elapsedMilliseconds);
 		}
 
+		//server state 2 is paused
 		if (!SERVER.LIVE_MODE && SERVER.STATE !== 2) {
 			const hbInterval = (SERVER.settings.core.heartbeat_interval / 1000);
 
@@ -467,7 +467,7 @@ async function sendAreas(socket) {
 async function setAreas(areaname, content) {
 	// Just for the 8-year olds
 	content = content.replace(
-		regexes.htmlBlacklist,
+		/<[ ]*(script|frame|style|marquee|blink)[ ]*([^>]*)>/gi,
 		"&lt;$1$2&gt;"
 	);
 
@@ -1647,7 +1647,7 @@ io.sockets.on('connection', function (ioSocket) {
 
 		playNext();
 	});
-	socket.on("sortPlaylist", function (data) {
+	socket.on("sortPlaylist", async function (data) {
 		if (!authService.can(socket.session, actions.ACTION_CONTROL_PLAYLIST)) {
 			kickForIllegalActivity(socket, "You cannot move videos");
 			return;
@@ -1678,6 +1678,25 @@ io.sockets.on('connection', function (ioSocket) {
 			{ mod: getSocketName(socket), title: decodeURIComponent(from.title()), type: "playlist" });
 
 		//TODO: Optimize, we don't need to update all indexes
+		//only update the necessary parts
+
+		/*
+		await databaseService.query`
+			update videos set position = ${to} where videoid = ${from.id()}
+		`;
+
+		if (data.to > data.from) {
+			await databaseService.query`
+				update videos set position = position + 1 where position >= ${from} && videoid is not ${from.id()}
+			`;
+		} else {
+			await databaseService.query`
+				update videos set position = position + 1 where position >= ${from} && videoid is not ${from.id()}
+			`;
+		}
+		*/
+
+
 		SERVER.PLAYLIST.each((video, index) => {
 			databaseService.query`
 				update videos set position = ${index} where videoid = ${video.id()}
