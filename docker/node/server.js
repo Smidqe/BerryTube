@@ -1709,6 +1709,10 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
+		/*
+		PLAYLIST.setActive(data.index);
+		*/
+
 		const prev = SERVER.ACTIVE;
 		const target = SERVER.PLAYLIST.at(data.index);
 

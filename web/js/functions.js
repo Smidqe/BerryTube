@@ -1064,11 +1064,28 @@ function handleACL() {
 
 	try {
 		dbg("ACL INIT:");
+
 		const body = document.body;
 
 		body.classList.toggle('admin', TYPE === 2);
 		body.classList.toggle('assistant', TYPE === 1);
 		body.classList.toggle('berry', LEADER);
+
+		/*
+		const accesses = [
+			{on: isRegisteredUser, fn: toggleLogoutForm},
+			{on: canSeeAdminLog, fn: toggleAdminLog},
+			{on: controlsPlaylist, fn: toggleQueueControls},
+			{}
+		];
+
+
+		for (const {on, fn} of accesses) {
+			fn(on());
+		}
+
+
+		*/
 
 		if (isRegisteredUser()) {
 			const headbar = document.querySelector('#headbar');
@@ -1089,6 +1106,12 @@ function handleACL() {
 				}
 			});
 		}
+
+		/*
+		if (controlsPlaylist()) {
+
+		}
+		*/
 
 		whenExists("#playlistAddControls", (controls) => {
 			const canQueue = controlsPlaylist();
@@ -2203,8 +2226,6 @@ function getStorageToggle(key) {
 }
 
 function addVideoEntryControls(entry) {
-	//access.can(ACCESS_PLAYLIST_CONTROLS)
-
 	//return early if no access
 	if (!controlsPlaylist()) {
 		return;

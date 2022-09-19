@@ -2029,6 +2029,8 @@ function initPolls(under) {
 		if (!canCreatePoll()) {
 			return;
 		}
+
+		
 		if (canCreatePoll()) {
 			var threshold = parseInt(runoffThreshold.val());
 			if (isNaN(threshold)) {
