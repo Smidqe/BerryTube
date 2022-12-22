@@ -52,6 +52,7 @@ exports.YoutubeHandler = class extends Handler {
 	}
 
 	async handle(links, data) {
+		
 		const json = await super.api(
 			'https://www.googleapis.com/youtube/v3/videos',
 			{

@@ -2,6 +2,8 @@ let lastPollCountdown = null;
 
 const integerRegex = /^\d+$/;
 
+
+
 const Videosources = [
 	/*
 	Each source follows following format
@@ -2509,10 +2511,10 @@ function formatChatMsg(msg, greentext = true) {
 		html: msg
 	});
 
-	[message, ...message.querySelectorAll('a')].forEach(node => {
+	for (const node of [message, ...message.querySelectorAll('a')]) {
 		node.setAttribute('target', '_blank');
 		node.setAttribute('rel', 'noopener noreferrer')
-	});
+	}
 
 	if (greentext && msg.startsWith('>', 0)) {
 		message.classList.add('green')

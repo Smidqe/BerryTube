@@ -9,6 +9,14 @@ const settings = require("../../bt_data/settings");
 const config = require("../../bt_data/db_info");
 
 exports.PlaylistService = class extends ServiceBase {
+	get current() {
+		return this.playlist.current();
+	}
+
+	get cursor() {
+		return this.playlist.cursor();
+	}
+
 	constructor(services) {
 		super(services);
 		this.auth = services.auth;
@@ -27,8 +35,9 @@ exports.PlaylistService = class extends ServiceBase {
 		});
 
 		this.time = 0;
-		//false = server, true = user
-		this.controlled = false;
+		//FIXME: Change to a "enum"
+		this.controller = 'server';
+		this.grabbers = new Map();
 		this.paused = false;
 	}
 
@@ -43,7 +52,10 @@ exports.PlaylistService = class extends ServiceBase {
 		`;
 
 		const {result: [active, time]} = await this.db.query`
-			select value from misc where name in ('server_active_videoid', 'server_time')
+			select value 
+			from misc 
+			where name in ('server_active_videoid', 'server_time')
+			order by name
 		`;
 
 		this.playlist.initialise(
@@ -51,21 +63,20 @@ exports.PlaylistService = class extends ServiceBase {
 			active,
 		);
 		
-		this.time = Number.parseInt(time ?? -settings.vc.head_time);
+		this.time = Number.parseInt(time || -settings.vc.head_time, 10);
 	}
 
 	async advance(socket) {
+		this.current.removeTag(true);
+		
 		if (this.current.volatile()) {
-			await this.delete(socket, this.cursor);
+			await this.remove(socket, {pos: this.cursor, sanityid: this.current.id()});
 		} else {
-			this.current.removeTag(true);
-			this.playlist.next();
+			this.playlist.advance();
 		}
 
 		//set new video and reset time
-		this.current = this.playlist.current();
 		this.time = -settings.vc.head_time;
-
 		this.log.info(events.EVENT_VIDEO_CHANGE,
 			"changed video to {videoTitle}",
 			{ videoTitle: this.current.title() });
@@ -82,30 +93,31 @@ exports.PlaylistService = class extends ServiceBase {
 
 	async add(socket, data) {
 		if (!this.auth.can(socket, actions.ACTION_CONTROL_PLAYLIST)) {
-			throw new Error("Cannot");
+			throw new Error("User has no permission to add videos");
 		}
 
-
-
-		/*
-		if (this.handlers.has(data.videotype)) {
-			throw Error('aaaaa');
+		if (!this.grabbers.has(data.videotype)) {
+			throw new Error("Format or provider has no handler implemented");
 		}
 
-		const video = await this.handlers.get(data.videotype).handle(data);
-
-		if (!video) {
-			throw Error("AAAAA");
-		}
+		const video = await this.grabbers.get(data.videotype).handle(data);
+		const position = data.queue ? this.cursor + 1 : this.playlist.videos().length;
 
 		if (data.queue) {
-			this.playlist.insert(video, this.playlist.cursor + 1);
+			this.playlist.insert(video, position);
 		} else {
 			this.playlist.append(video);
 		}
 
-		const position = data.queue ? this.playlist.cursor + 1 : this.playlist.videos().length;
+		//remove it from the videos_history (why?)
+		await this.db.query`
+			DELETE FROM
+				videos_history
+			WHERE
+				videoid = ${video.id()}
+		`;
 
+		//insert the actual video to table
 		await this.db.query`
 			insert into videos_new 
 				(position, videoid, videotitle, videolength, videotype, videovia, meta) 
@@ -115,20 +127,20 @@ exports.PlaylistService = class extends ServiceBase {
 					${video.id()}, 
 					${video.title()}, 
 					${video.duration()}, 
-					${video.source()}, 
+					${video.source()},
+					${getSocketName(socket)}
 					${JSON.stringify(video.metadata())}
 				)
 		`;
 
-		//if we queue it next, update positions too
+		//update positions only if we queued as next video
 		if (data.queue) {
-			this.db.query`
+			await this.db.query`
 				UPDATE videos_new
 				SET position = position + 1
 				WHERE position >= ${position} AND id IS NOT ${video.id()}
 			`;
 		}
-		*/
 	}
 
 	resync(socket) {
@@ -137,34 +149,24 @@ exports.PlaylistService = class extends ServiceBase {
 	}
 
 	async move(socket, data) {
-		if (this.playlist.at(data.from).id() !== data.sanityid) {
+		if (this.playlist.at(data.from)?.id() !== data.sanityid) {
 			return this.resync(socket);
 		}
 
-		//move
 		this.playlist.move(data.from, data.to);
 
-		//update positions in db
-		if (data.from < data.to) {
-			await this.db.query`
-				update videos_new set position = CASE
-					WHEN position = ${data.from} THEN ${data.to - 1}
-					WHEN position = ${data.to} THEN ${data.from}
-					ELSE
-						position - 1
-				END
-				WHERE position >= ${data.from} and position < ${data.to}
-			`;
-		} else {
-			await this.db.query`
-				update videos_new set position = CASE
-					WHEN position = ${data.to} THEN ${data.from}
-					ELSE
-						position + 1
-				END
-				WHERE position < ${data.from} and position >= ${data.to}
-			`;
-		}
+		const min = Math.min(data.from, data.to);
+		const max = Math.max(data.from, data.to);
+
+		await this.db.query`
+			UPDATE videos_new SET position = ${data.to} WHERE position = ${data.from};
+		`;
+
+		await this.db.query`
+			UPDATE videos_new 
+			SET position = position + ${Math.sign(data.to - data.from)}
+			WHERE position >= ${min} and position <= ${max} and id is not ${data.sanityid}
+		`;
 
 		this.io.sockets.emit("sortPlaylist", data);
 	}
@@ -215,7 +217,7 @@ exports.PlaylistService = class extends ServiceBase {
 		`;
 
 		this.io.sockets.emit("delVideo", data);
-		this.log.info(events.EVENT_ADMIN_MOVED_VIDEO, "NEW: Cursor is at: {cursor}", { cursor: this.playlist.cursor });
+		this.log.info(events.EVENT_ADMIN_MOVED_VIDEO, "NEW: Cursor is at: {cursor}", { cursor: this.cursor });
 	}
 
 	async jump(socket, data) {
@@ -223,14 +225,14 @@ exports.PlaylistService = class extends ServiceBase {
 			return this.resync(socket);
 		}
 
+		this.current.removeTag(true);
+
 		if (this.current.volatile()) {
-			await this.delete(socket, this.cursor);
-		} else {
-			this.current.removeTag(true);
-			this.playlist.set_cursor(data.index);
+			await this.delete(socket, {pos: this.cursor, sanityid: data.sanityid});
+			data.index -= 1;
 		}
 
-		this.current = this.playlist.current();
+		this.playlist.set_cursor(data.index);
 
 		this.announce(this.io.sockets, "forceVideoChange");
 		this.log.info(events.EVENT_ADMIN_FORCED_VIDEO_CHANGE, "NEW: {mod} forced video change", {
@@ -239,31 +241,23 @@ exports.PlaylistService = class extends ServiceBase {
 		});
 	}
 
-	is_synced(id) {
-		return this.playlist.current().id() === id;
-	}
-
 	async fondle(socket, data) {
 		if (!this.auth.can(socket.session, actions.ACTION_SET_VIDEO_VOLATILE)) {
 			return;
 		}
 
-		if (!this.is_synced(data.sanityid)) {
+		if (!this.current.id() !== data.sanityid) {
 			return this.resync(socket);
 		}
 
 		const video = this.playlist.at(data.info.pos);
 
 		switch (data.action) {
-			case "setVolatile":
-				video.setVolatile(data.info.volat);
-				break;
-			case "setColorTag":
-				video.setTag(data.info.tag, data.info.volat);
-				break;
+			case 'setVolatile': video.setVolatile(data.info.volat); break;
+			case 'setColorTag': video.setTag(data.info.tag, data.info.volat); break;
 		}
 
-		this.db.query`
+		await this.db.query`
 			UPDATE videos
 			SET meta = ${JSON.stringify(video.meta())}
 			WHERE videoid = ${video.id()}
@@ -274,7 +268,7 @@ exports.PlaylistService = class extends ServiceBase {
 
 	announce(socket, event) {
 		socket.emit(event, {
-			video: this.playlist.current().pack(),
+			video: this.current.pack(),
 			time: this.time,
 			state: this.state,
 		});
@@ -285,14 +279,28 @@ exports.PlaylistService = class extends ServiceBase {
 		});
 	}
 
-	async onTick(elapsed) {
-		if (this.paused) {
+	seek(socket, event) {
+		if (!this.auth.can(socket.session, actions.ACTION_CONTROL_VIDEO)) {
 			return;
 		}
 
-		this.time += elapsed / 1000;
+		this.time = event;
+		this.announce(this.io.sockets, 'hbVideoDetail');
+	}
 
-		if (this.time > 0 && Math.round(this.time) % settings.core.heartbeat_interval === 0) {
+	onTick(elapsed) {
+		if (!this.current || this.paused) {
+			return;
+		}
+
+		this.time += Math.round(elapsed / 1000);
+
+		if (this.time + 1 >= this.current.duration() + settings.vc.tail_time) {
+			this.advance();
+			return;
+		}
+
+		if (this.time > 0 && this.time % (settings.core.heartbeat_interval / 1000)) {
 			this.announce(this.io.sockets, "hbVideoDetail");
 			this.db.query`
 				UPDATE
@@ -302,11 +310,6 @@ exports.PlaylistService = class extends ServiceBase {
 				WHERE
 					name = 'server_time'
 			`;
-		}
-
-		//we've reached end of video, play next video
-		if (this.time >= this.current.duration()) {
-			this.advance();
 		}
 	}
 };

@@ -338,7 +338,7 @@ function initResumePosition(callback) {
 	});
 }
 async function upsertMisc(data, callback) {
-	databaseService.query`
+	await databaseService.query`
 		insert into
 			misc (name, value)
 		VALUES
@@ -1677,26 +1677,6 @@ io.sockets.on('connection', function (ioSocket) {
 			"{mod} moved {title}",
 			{ mod: getSocketName(socket), title: decodeURIComponent(from.title()), type: "playlist" });
 
-		//TODO: Optimize, we don't need to update all indexes
-		//only update the necessary parts
-
-		/*
-		await databaseService.query`
-			update videos set position = ${to} where videoid = ${from.id()}
-		`;
-
-		if (data.to > data.from) {
-			await databaseService.query`
-				update videos set position = position + 1 where position >= ${from} && videoid is not ${from.id()}
-			`;
-		} else {
-			await databaseService.query`
-				update videos set position = position + 1 where position >= ${from} && videoid is not ${from.id()}
-			`;
-		}
-		*/
-
-
 		SERVER.PLAYLIST.each((video, index) => {
 			databaseService.query`
 				update videos set position = ${index} where videoid = ${video.id()}
@@ -1762,6 +1742,8 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
+
+		
 		const links = {
 			socket,
 			playlist: SERVER.PLAYLIST,
@@ -1898,6 +1880,12 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
+		const getFilledMessage = (banning, temp) => {
+
+		}
+
+		const message2 = `/me ${getFilledMessage(data.sban, data.temp)} ${data.nick} ${banEmotes[Math.floor(Math.random() * banEmotes.length)]}`
+
 		var targetNick = data.nick;
 		var isbanning = data.sban;
 		var temp = data.temp;
@@ -1926,11 +1914,8 @@ io.sockets.on('connection', function (ioSocket) {
 		message = '/me ' + message;
 		_sendChat(socket.session.nick, 3, { msg: message, metadata: { channel: 'admin' } }, socket);
 
-		if (isbanning) {
-			sessionService.setShadowbanForNick(targetNick, true, temp);
-		} else {
-			sessionService.setShadowbanForNick(targetNick, false);
-		}
+
+		sessionService.setShadowbanForNick(targetNick, isbanning, temp);
 
 		const shadowbant = Object.values(sessionService.ipAddresses)
 			.reduce((acc, entry) => {
@@ -2068,11 +2053,6 @@ function withAliases(keys, value) {
 	return obj;
 }
 
-/*
-*/
-
-
-/*
 function assert_eq(a, b, message) {
 	if (typeof a === 'object') {
 		[a, b] = [JSON.stringify(a), JSON.stringify(b)];
@@ -2102,6 +2082,5 @@ function comparePlaylists() {
 		assert_eq(a.volat, b.volatile(), `Volatililty no match: ${a.volat} !== ${b.volatile()}`);
 	}
 }
-*/
 
 /* vim: set noexpandtab : */

@@ -14,12 +14,12 @@ if ($('#toastMessageStyling').length == 0) {
 		);
 }
 
+var loggingEnabled = getStoredBoolean('loggingEnabled', false);
 /**
  * Logs the given message with console.log(), prepended with a timestamp.
  *
  * @param {String} message  The message to log.
  */
-var loggingEnabled = getStoredBoolean('loggingEnabled', false);
 function log(message) {
 	if (loggingEnabled) {
 		var now = new Date();
@@ -51,14 +51,7 @@ function getStoredInt(key, defValue) {
 	var value = parseInt(localStorage.getItem(key));
 	if (value) {
 		return value;
-	}
-	else {
-		return defValue;
-	}
-}
-
-/**
- * Retrieves a boolean from local storage. If the value doesn't exist or isn't a valid
+	}var loggingEnabled = getStoredBoolean('loggingEnabled', false);rom local storage. If the value doesn't exist or isn't a valid
  * boolean, the default value will be returned instead.
  *
  * @param {String} key        The key name for the boolean to retrieve.

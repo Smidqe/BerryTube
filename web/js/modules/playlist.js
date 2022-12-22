@@ -1,14 +1,29 @@
 export class Video {
-	constructor() {
-		this.id = null;
-		this.title = null;
-		this.length = -1;
+	constructor(data) {
+		this.id = data.id;
+		this.title = data.title;
+		this.length = data.length || -1;
 
+		this.meta = data.meta;
 		this.dom = null;
-		this.meta = {};
 	}
 }
 
 export class Playlist {
+	constructor() {
+		this.items = [];
+		this.active = 0;
+		this.dom = null;
+	}
+
+	initialize(items, active = null) {
+		this.items = items;
+		this.active = active || 0;
+	}
+
+	move(from, to) {
+
+	}
+
 	
 }

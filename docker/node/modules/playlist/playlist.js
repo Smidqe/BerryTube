@@ -37,7 +37,6 @@ exports.Playlist = class {
 	move(from, to) {
 		this.items.splice(to, 0, ...this.items.splice(from, 1));
 		
-
 		const active = from === this.cursor;
 		const signs = [
 			Math.sign(from - this.cursor),
@@ -78,6 +77,22 @@ exports.Playlist = class {
 	}
 
 	next() {
+		if (this.cursor + 1 === this.items.length) {
+			return this.items[0];
+		} else {
+			return this.items[this.cursor + 1];
+		}
+	}
+
+	prev() {
+		if (this.cursor - 1 < 0) {
+			return this.items[this.items.length - 1];
+		} else {
+			return this.items[this.cursor - 1];
+		}
+	}
+
+	advance() {
 		if (this.cursor + 1 < this.items.length) {
 			this.cursor += 1;
 		} else {
