@@ -45,6 +45,21 @@ socket.on("createPlayer", function (data) {
 socket.on("renewPos", function (data) {
 	setPlaylistPosition(data);
 });
+socket.on("refreshPlaylist", (data) => {
+	if (data.desync) {
+		showDoorStuckDialog();
+	}
+
+	PLAYLIST = new LinkedList.Circular();
+
+	for (const video of data) {
+		PLAYLIST.append(video)
+	}
+
+	newPlaylist($("#plul"));
+	socket.emit("renewPos");
+	handleACL();
+});
 socket.on("recvNewPlaylist", function (data) {
 	PLAYLIST = new LinkedList.Circular();
 
@@ -99,6 +114,7 @@ socket.on("hbVideoDetail", function (data) {
 			flags.seek = [true, data.time];
 		}
 
+		//TODO: Make these into globals
 		flags.play = data.state === 1 && videoState !== 1;
 		flags.pause = data.state === 2;
 

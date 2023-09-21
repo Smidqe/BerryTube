@@ -3,10 +3,11 @@ const { getSocketName } = require("../sessions");
 const { ServiceBase } = require("../base");
 const { events } = require("../log/events");
 const { Playlist } = require("./playlist");
-const { Video } = require("./video");
+const { Video, VideoFormat } = require("./video");
 
 const settings = require("../../bt_data/settings");
 const config = require("../../bt_data/db_info");
+
 
 exports.PlaylistService = class extends ServiceBase {
 	get current() {
@@ -38,6 +39,9 @@ exports.PlaylistService = class extends ServiceBase {
 		//FIXME: Change to a "enum"
 		this.controller = 'server';
 		this.grabbers = new Map();
+		this.handlers = new Map(
+			[VideoFormat.YOUTUBE, null]
+		);
 		this.paused = false;
 	}
 
@@ -99,8 +103,10 @@ exports.PlaylistService = class extends ServiceBase {
 		if (!this.grabbers.has(data.videotype)) {
 			throw new Error("Format or provider has no handler implemented");
 		}
+		
+		const handler = this.handlers.get(data.videotype);
+		const video = await handler.handle(data);
 
-		const video = await this.grabbers.get(data.videotype).handle(data);
 		const position = data.queue ? this.cursor + 1 : this.playlist.videos().length;
 
 		if (data.queue) {
@@ -144,8 +150,7 @@ exports.PlaylistService = class extends ServiceBase {
 	}
 
 	resync(socket) {
-		socket.emit("recvNewPlaylist", this.items);
-		socket.emit("doorStuck");
+		socket.emit('refreshPlaylist', {desynced: true, items: this.items});
 	}
 
 	async move(socket, data) {

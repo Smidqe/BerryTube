@@ -19,11 +19,7 @@ exports.Handler = class {
 		return response.json();
 	}
 
-	async handle(services, data, video) {
-		video.setVolatile(
-			data.volat || services.socket.session.type === 0 || video.duration() > settings.core.auto_volatile
-		);
-
+	async updateMetadata(services, video) {
 		const {result} = await services.db.query`
 			select meta from videos_history where videoid = ${video.id()}
 		`;
@@ -39,13 +35,10 @@ exports.Handler = class {
 			}
 		}
 
-		await services.db.query`
-			DELETE FROM
-				videos_history
-			WHERE
-				videoid = ${video.id()}
-		`;
+		return video;
+	}
 
+	async saveToDatabase(services, data, video) {
 		const playlist = services.playlist;
 		const activeIndex = playlist.indexOf((video) => video.id() === services.active.id());
 		const index = data.queue ? activeIndex + 1 : playlist.length;
@@ -70,11 +63,30 @@ exports.Handler = class {
 			`;
 		}
 
+	}
+
+	async handle(services, data, video) {
+		const isVideoLong = video.duration() > settings.core.auto_volatile;
+		const isVolatile = data.volat || services.socket.session.type === 0;
+
+		//probably could be better but meh
+		video.setVolatile(isVolatile || isVideoLong);
+		video = await this.updateMetadata(services, video);
+
+		await services.db.query`
+			DELETE FROM
+				videos_history
+			WHERE
+				videoid = ${video.id()}
+		`;
+
+		await this.saveToDatabase(services, data, video);
+
 		//add to actual playlist
-		if (!data.queue || !playlist.length) {
-			playlist.append(video);
+		if (!data.queue || !services.playlist.length) {
+			services.playlist.append(video);
 		} else {
-			playlist.insertAfter(services.active, video);
+			services.playlist.insertAfter(services.active, video);
 		}
 
 		services.io.sockets.emit('addVideo', {queue: data.queue, video: video.pack(), sanityid: services.active.id()});

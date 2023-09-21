@@ -1,3 +1,7 @@
+exports.VideoFormat = {
+	YOUTUBE: 'yt',
+};
+
 exports.Video = class {
 	constructor(data) {
 		//videoid can also be number :(, therefore cast it to string

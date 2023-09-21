@@ -376,13 +376,14 @@ function initHardbant(callback) {
 }
 function initShadowbant(callback) {
 	getMisc({ name: "shadowbant_ips" }, function (ips) {
-		if (ips) {
-			
-			var shadowbant = JSON.parse(ips) || [];
-			for (var i = 0; i < shadowbant.length; ++i) {
-				var data = shadowbant[i];
-				sessionService.setShadowbanForIp(data.ip, true, data.temp);
-			}
+		if (!ips) {
+			return;
+		}
+
+		const bans = JSON.parse(ips) || [];
+
+		for (const ban of bans) {
+			sessionService.setShadowbanForIp(ban.ip, true, data.temp)
 		}
 
 		if (callback) {
@@ -423,25 +424,26 @@ function initTimer() {
 			service.onTick(elapsedMilliseconds);
 		}
 
-		//server state 2 is paused
-		if (!SERVER.LIVE_MODE && SERVER.STATE !== 2) {
-			const hbInterval = (SERVER.settings.core.heartbeat_interval / 1000);
-
-			//only beat on different seconds
-			const beat = Math.floor(SERVER.TIME + elapsedSeconds) > Math.floor(SERVER.TIME);
-
-			if (Math.ceil(SERVER.TIME + 1) >= (SERVER.ACTIVE.duration() + SERVER.settings.vc.tail_time)) {
-				playNext();
-				return;
-			}
-
-			if (beat && SERVER.TIME > 0 && Math.floor(SERVER.TIME) % hbInterval === 0) {
-				sendStatus("hbVideoDetail", io.sockets);
-				upsertMisc({ name: 'server_time', value: '' + Math.ceil(SERVER.TIME) });
-			}
-
-			SERVER.TIME += elapsedSeconds;
+		//we are either paused or sharing a livestream
+		if (SERVER.LIVE_MODE || SERVER.STATE === 2) {
+			return;
 		}
+
+		//only beat on different seconds
+		const hbInterval = (SERVER.settings.core.heartbeat_interval / 1000);
+		const beat = Math.floor(SERVER.TIME + elapsedSeconds) > Math.floor(SERVER.TIME);
+
+		if (Math.ceil(SERVER.TIME + 1) >= (SERVER.ACTIVE.duration() + SERVER.settings.vc.tail_time)) {
+			playNext();
+			return;
+		}
+
+		if (beat && SERVER.TIME > 0 && Math.floor(SERVER.TIME) % hbInterval === 0) {
+			sendStatus("hbVideoDetail", io.sockets);
+			upsertMisc({ name: 'server_time', value: '' + Math.ceil(SERVER.TIME) });
+		}
+
+		SERVER.TIME += elapsedSeconds;
 	}, 1000);
 }
 async function initAreas() {
@@ -1408,6 +1410,7 @@ io.sockets.on('connection', function (ioSocket) {
 
 		const logData = { mod: getSocketName(socket), type: "playlist", id: data.videoid };
 
+		//what's this?
 		if (!/^[\w \-#]{3,50}$/.test(data.videoid)) {
 			DefaultLog.error(events.EVENT_ADMIN_CLEARED_HISTORY, "{mod} could not delete history for invalid id {id}", logData);
 			return;
@@ -1545,19 +1548,19 @@ io.sockets.on('connection', function (ioSocket) {
 			const now = new Date();
 			const registered = SERVER.RECENTLY_REGISTERED.get(socket.ip);
 
-			if (registered) {
-				if (now - registered.time > SERVER.settings.core.register_cooldown) {
-					SERVER.RECENTLY_REGISTERED.remove(socket.ip);
-				} else {
-					DefaultLog.error(
-						events.EVENT_REGISTER, 
-						"{nick} could not register from ip {ip}", 
-						logData, 
-						"You are registering too many usernames, try again later."
-					);
+			if (registered && registered.time <= SERVER.settings.core.register_cooldown) {
+				DefaultLog.error(
+					events.EVENT_REGISTER, 
+					"{nick} could not register from ip {ip}", 
+					logData, 
+					"You are registering too many usernames, try again later."
+				);
 
-					socket.emit("loginError", { message: "You are registering too many usernames, try again later." });
-				}
+				socket.emit("loginError", { message: "You are registering too many usernames, try again later." });
+			}
+
+			if (registered) {
+				SERVER.RECENTLY_REGISTERED.remove(socket.ip)
 			} else {
 				SERVER.RECENTLY_REGISTERED.set(socket.ip, now);
 			}
@@ -1742,7 +1745,46 @@ io.sockets.on('connection', function (ioSocket) {
 			return;
 		}
 
+		/*
+		if (!videoHandlers.has(data.videotype)) {
+			DefaultLog.error(
+				events.EVENT_ADMIN_ADDED_VIDEO,
+				"no handler for {source}",
+				{source: data.videotype},
+			);
 
+			socket.emit("dupeAdd");
+			return;
+		}
+
+		const services = {
+			socket,
+			playlist: SERVER.PLAYLIST,
+			active: SERVER.ACTIVE,
+			...serviceLocator
+		};
+
+		const onSuccess = () => {
+			DefaultLog.info(
+				events.EVENT_ADMIN_ADDED_VIDEO,
+				"{mod} added {provider} video {title}",
+				{mod: getSocketName(socket), provider: video.source(), title: video.title()}
+			);
+		}
+		const onError = (err) => {
+			DefaultLog.error(
+				events.EVENT_ADMIN_ADDED_VIDEO,
+				"could not add {source} video: err: {msg}",
+				{source: data.videotype, msg: err.message},
+			);
+
+			socket.emit("dupeAdd");
+		}
+
+		videoHandlers.get(data.videotype).handle(services, video)
+			.then(onSuccess)
+			.catch(onError);
+		*/
 		
 		const links = {
 			socket,
