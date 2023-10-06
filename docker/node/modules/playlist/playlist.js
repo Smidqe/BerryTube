@@ -13,15 +13,27 @@ exports.Playlist = class {
 		}
 	}
 
-	set_cursor(index) {
+	count() {
+		return this.items.length;
+	}
+
+	isEmpty() {
+		return this.items.length === 0;
+	}
+
+	setCursor(index) {
 		this.cursor = index;
 	}
 
-	insert(item, index) {
-		this.items.splice(index, 0, item);
+	getCursor() {
+		return this.cursor;
+	}
 
-		if (index <= this.cursor) {
-			this.cursor += 1;
+	add(video, queue) {
+		if (queue) {
+			this.items.splice(this.cursor + 1, 0, video);
+		} else {
+			this.items.push(video);
 		}
 	}
 
@@ -67,6 +79,9 @@ exports.Playlist = class {
 	remove(index) {
 		this.items.splice(index, 1);
 
+		//if we are removing from behind the current video
+		//or we are at the end of the playlist
+		//substract 1 from the position
 		if (index < this.cursor || this.cursor >= this.items.length) {
 			this.cursor -= 1;
 		}
@@ -98,5 +113,9 @@ exports.Playlist = class {
 		} else {
 			this.cursor = 0;
 		}
+	}
+
+	pack() {
+		return this.videos().map(video => video.pack());
 	}
 };

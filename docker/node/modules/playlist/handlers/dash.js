@@ -6,11 +6,11 @@ const et = require("elementtree");
 const isoDuration = require("iso8601-duration");
 
 exports.DashHandler = class extends Handler {
-	constructor() {
-		super();
+	constructor(services) {
+		super(services);
 	}
 
-	async handle(links, data) {
+	async handle(socket, data) {
 		const id = data.videoid.trim();
 		const video = await fetch(id)
 			.then(resp => resp.text())
@@ -32,7 +32,7 @@ exports.DashHandler = class extends Handler {
 			});
 
 		return super.handle(
-			links,
+			socket,
 			data,
 			video
 		);

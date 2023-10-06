@@ -2,11 +2,11 @@ const { Video } = require("../video");
 const { Handler } = require("./base");
 
 exports.DailymotionHandler = class extends Handler {
-	constructor() {
-		super();
+	constructor(services) {
+		super(services);
 	}
 
-	async handle(services, data) {
+	async handle(socket, data) {
 		const id = data.videoid.trim();
 		const json = await super.api(
 			`https://api.dailymotion.com/video/${id}?fields=title,duration`,
@@ -20,7 +20,7 @@ exports.DailymotionHandler = class extends Handler {
 		}
 
 		return super.handle(
-			services,
+			socket,
 			data,
 			new Video({
 				videoid: id,

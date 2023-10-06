@@ -2,8 +2,8 @@ const { Video } = require("../video");
 const { Handler } = require("./base");
 
 exports.TwitchClipHandler = class extends Handler {
-	constructor() {
-		super();
+	constructor(services) {
+		super(services);
 	}
 
 	async api(endpoint, sub, params = {}) {

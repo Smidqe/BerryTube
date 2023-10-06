@@ -2,8 +2,8 @@ const { Video } = require("../video");
 const { Handler } = require("./base");
 
 exports.TwitchHandler = class extends Handler {
-	constructor() {
-		super();
+	constructor(services) {
+		super(services);
 
 		this.token = {
 			value: null,
@@ -55,7 +55,7 @@ exports.TwitchHandler = class extends Handler {
 
 		let videoid = json._id;
 
-		if (videoid[0] === 'v') {
+		if (videoid.startsWith('v')) {
 			videoid = videoid.substr(1);
 		}
 

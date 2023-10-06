@@ -4,8 +4,8 @@ const { parseRawFileUrl } = require("../../utils");
 const getDuration = require('get-video-duration');
 
 exports.FileHandler = class extends Handler {
-	constructor() {
-		super();
+	constructor(services) {
+		super(services);
 	}
 
 	async handle(services, data) {
@@ -27,15 +27,13 @@ exports.FileHandler = class extends Handler {
 			throw new Error("[File]: No duration");
 		}
 
-		return super.handle(
-			services,
-			data,
-			new Video({
-				videoid: url,
-				videotitle: info.title,
-				videolength: duration,
-				videotype: "file",
-			})
-		);
+		const video = new Video({
+			videoid: url,
+			videotitle: info.title,
+			videolength: duration,
+			videotype: "file",
+		});
+
+		return super.handle(services, data, video);
 	}
 };

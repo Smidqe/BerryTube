@@ -3,7 +3,11 @@ const fetch = require('node-fetch');
 const settings = require("../../../bt_data/settings");
 
 exports.Handler = class {
-	constructor() {}
+	constructor(services) {
+		this.log = services.log;
+		this.db = services.db;
+		this.playlist = services.playlist;
+	}
 
 	async api(url, headers = {}, params = {}) {
 		params = encodeURI(Object.entries(params).map(([key, value]) => `${key}=${value}`).join('&'));
@@ -19,8 +23,8 @@ exports.Handler = class {
 		return response.json();
 	}
 
-	async updateMetadata(services, video) {
-		const {result} = await services.db.query`
+	async updateMetadata(video) {
+		const {result} = await this.db.query`
 			select meta from videos_history where videoid = ${video.id()}
 		`;
 		
@@ -38,59 +42,53 @@ exports.Handler = class {
 		return video;
 	}
 
-	async saveToDatabase(services, data, video) {
-		const playlist = services.playlist;
-		const activeIndex = playlist.indexOf((video) => video.id() === services.active.id());
-		const index = data.queue ? activeIndex + 1 : playlist.length;
+	async saveToDatabase(socket, data, video) {
+		const index = data.queue ? this.playlist.getCursor() + 1 : this.playlist.videos().length;
 		const params = [
 			index, 
 			video.id(), 
 			video.title(), 
 			video.duration(), 
 			video.source(), 
-			services.socket.session.nick, 
+			socket.session.nick, 
 			JSON.stringify(video.metadata())
 		];
 
-		await services.db.query(
+		await this.db.query(
 			[`insert into ${config.video_table} (position, videoid, videotitle, videolength, videotype, videovia, meta) VALUES (?,?,?,?,?,?,?);`],
 			...params
 		);
 
 		if (data.queue) {
-			await services.db.query`
+			await this.db.query`
 				update videos set position = position + 1 where not videoid = ${video.id()} and position >= ${index}
 			`;
 		}
 
 	}
 
-	async handle(services, data, video) {
+	async handle(socket, data, video) {
 		const isVideoLong = video.duration() > settings.core.auto_volatile;
-		const isVolatile = data.volat || services.socket.session.type === 0;
+		const isVolatile = data.volat || socket.session.type === 0;
 
 		//probably could be better but meh
 		video.setVolatile(isVolatile || isVideoLong);
-		video = await this.updateMetadata(services, video);
+		video = await this.updateMetadata(video);
 
-		await services.db.query`
+		await this.db.query`
 			DELETE FROM
 				videos_history
 			WHERE
 				videoid = ${video.id()}
 		`;
 
-		await this.saveToDatabase(services, data, video);
+		await this.saveToDatabase(socket, data, video);
 
-		//add to actual playlist
-		if (!data.queue || !services.playlist.length) {
-			services.playlist.append(video);
-		} else {
-			services.playlist.insertAfter(services.active, video);
-		}
+		this.playlist.add(
+			video,
+			data.queue && !this.playlist.isEmpty()
+		);
 
-		services.io.sockets.emit('addVideo', {queue: data.queue, video: video.pack(), sanityid: services.active.id()});
-	
 		return video;
 	}
 };

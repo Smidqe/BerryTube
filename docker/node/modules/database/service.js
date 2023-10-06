@@ -58,4 +58,14 @@ exports.DatabaseService = class extends ServiceBase {
 			});
 		});
 	}
+
+	upsertMisc(key, value) {
+		return this.query`
+			insert into
+				misc (name, value)
+			VALUES
+				(${key}, ${value})
+			ON DUPLICATE KEY UPDATE value = ${value}	
+		`;
+	}
 };

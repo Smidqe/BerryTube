@@ -1,5 +1,15 @@
 exports.VideoFormat = {
 	YOUTUBE: 'yt',
+	DAILYMOTION: 'dm',
+	VIMEO: 'vimeo',
+	SOUNDCLOUD: 'sc',
+	REDDIT: 'reddit',
+	DASH: 'dash',
+	HLS: 'hls',
+	FILE: 'file',
+	MANIFEST: 'manifest',
+	TWITCH: 'twitch',
+	TWITCHCLIP: 'twitchclip'
 };
 
 exports.Video = class {

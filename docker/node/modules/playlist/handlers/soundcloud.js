@@ -3,8 +3,8 @@ const { Handler } = require("./base");
 const fetch = require('node-fetch');
 
 exports.SoundcloudHandler = class extends Handler {
-	constructor() {
-		super();
+	constructor(services) {
+		super(services);
 
 		this.token = {
 			value: null,
@@ -39,7 +39,7 @@ exports.SoundcloudHandler = class extends Handler {
 		return this.token.value;
 	}
 
-	async handle(data) {
+	async handle(socket, data) {
 		const id = encodeURIComponent(data.videoid.trim());
 
 		if (id.length === 0) {
@@ -53,7 +53,7 @@ exports.SoundcloudHandler = class extends Handler {
 			'Authorization': `OAuth ${token}`
 		});
 
-		return new Video({
+		const video = new Video({
 			videoid: `SC${response.id}`,
 			videotitle: encodeURIComponent(`${response.user.username} - ${response.title}`),
 			videolength: response.duration / 1000,
@@ -62,6 +62,8 @@ exports.SoundcloudHandler = class extends Handler {
 				permalink: response.permalink_url
 			}
 		});
+
+		return super.handle(socket, data, video);
 	}
 };
 

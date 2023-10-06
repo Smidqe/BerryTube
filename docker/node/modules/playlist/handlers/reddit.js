@@ -1,8 +1,21 @@
 const { Handler } = require("./base");
+const { DashHandler } = require("./dash");
 
 exports.RedditHandler = class extends Handler {
-	constructor() {
-		super();
+	constructor(services) {
+		super(services);
+		this.services = services;
+		this.db = services.db;
+	}
+
+	async exists(id) {
+		const {result} = await this.db.query`
+			select videoid 
+			from videos 
+			where videoid = ${id}
+		`;
+
+		return result.length > 0;
 	}
 
 	async getURL(url) {
@@ -34,22 +47,17 @@ exports.RedditHandler = class extends Handler {
 		return videoBlock.dash_url;
 	}
 
-	async handle(services, data) {
+	async handle(socket, data) {
 		const url = await this.getURL(data.videoid);
 		const videoid = url.split('?')[0];
 		const videotitle = videoid.split('/').reverse()[1];
 
-		const {result} = await services.db.query(
-			['select videoid from videos where videoid = ?'],
-			[videoid]
-		);
-		
-		if (result.length) {
-			throw new Error(`[Reddit]: Reddit video is already on the playlist: ${videoid}, res: ${JSON.stringify(result)}`);
+		if (await this.exists(videoid)) {
+			throw new Error(`[Reddit]: Reddit video is already on the playlist: ${videoid}`);
 		}
 
-		return services.handlers.get("dash").handle(
-			services,
+		return (new DashHandler(this.services)).handle(
+			socket,
 			{...data, videoid, videotitle}
 		);
 	}

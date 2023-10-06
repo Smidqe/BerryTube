@@ -188,7 +188,7 @@ socket.on("addPlaylist", async function (data) {
 socket.on("delVideo", function (data) {
 	unfuckPlaylist();
 	dbg(data);
-	const item = document.querySelector(`#playlist li:nth-child(${data.position + 1})`);
+	const item = document.querySelector(`#playlist li:nth-child(${data.index + 1})`);
 	const video = item.video;
 
 	if (video.videoid !== data.sanityid) {

@@ -3,11 +3,11 @@ const { Handler } = require("./base");
 const { sanitizeManifest } = require("../manifest");
 
 exports.ManifestHandler = class extends Handler {
-	constructor() {
-		super();
+	constructor(services) {
+		super(services);
 	}
 
-	async handle(links, data) {
+	async handle(socket, data) {
 		const manifestUrl = data.videoid.trim();
 		const response = await super.api(manifestUrl);
 		const manifest = sanitizeManifest(response);
@@ -27,7 +27,7 @@ exports.ManifestHandler = class extends Handler {
 		});
 
 		return super.handle(
-			links,
+			socket,
 			data,
 			video
 		);

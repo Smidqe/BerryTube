@@ -6,8 +6,8 @@ const isoCountries = require('i18n-iso-countries');
 const isoDuration = require('iso8601-duration');
 
 exports.YoutubeHandler = class extends Handler {
-	constructor() {
-		super();
+	constructor(services) {
+		super(services);
 	}
 
 	getGeoblockedCountries(restrictions) {
@@ -51,7 +51,7 @@ exports.YoutubeHandler = class extends Handler {
 		return geoblock;
 	}
 
-	async handle(links, data) {
+	async handle(socket, data) {
 		const json = await super.api(
 			'https://www.googleapis.com/youtube/v3/videos',
 			{
@@ -73,12 +73,12 @@ exports.YoutubeHandler = class extends Handler {
 		};
 
 		if (!data.force && Object.values(restrictions).some(value => value)) {
-			links.socket.emit("videoRestriction", restrictions);
+			socket.emit("videoRestriction", restrictions);
 			throw new Error(`[Youtube]: Video ${data.videoid} has visibility restrictions`);
 		}
 
 		return super.handle(
-			links,
+			socket,
 			data,
 			new Video({
 				videoid: data.videoid,
