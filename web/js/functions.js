@@ -1012,9 +1012,10 @@ function setNick(nick) {
 
 	let nickElem = document.querySelector('.setNick');
 
-	nickElem.previousSibling.classList.remove('right');
-	nickElem.previousSibling.setAttribute('aria-label', 'message');
-	nickElem.remove();
+	console.log(nick);
+	nickElem?.previousSibling.classList.remove('right');
+	nickElem?.previousSibling.setAttribute('aria-label', 'message');
+	nickElem?.remove();
 
 	ORIGNAME = nick;
 	sortUserList();

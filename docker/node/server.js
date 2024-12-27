@@ -660,30 +660,6 @@ function applyPluginFilters(msg, socket) {
 
 	return msg;
 }
-function setVideoVolatile(socket, video, isVolat) {
-	video.setVolatile(isVolat);
-
-	DefaultLog.info(events.EVENT_ADMIN_SET_VOLATILE,
-		"{mod} set {title} to {status}",
-		{ mod: getSocketName(socket), type: "playlist", title: decodeURIComponent(video.title()), status: isVolat ? "volatile" : "not volatile" });
-}
-
-async function setVideoColorTag(socket, elem, tag, volat) {
-	if (!tag) {
-		elem.removeTag(false);
-	} else {
-		elem.setTag(tag, volat);
-	}
-	
-	await databaseService.query`
-		UPDATE
-			videos
-		SET
-			meta = ${JSON.stringify(elem.metadata())}
-		WHERE
-			videoid = ${elem.id()}
-	`;
-}
 
 function banUser(data, mod = undefined) {
 	if (['ips', 'nicks', 'duration'].some(n => !(n in data))) {

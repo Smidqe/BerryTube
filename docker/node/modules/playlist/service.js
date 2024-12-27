@@ -20,6 +20,7 @@ const { TwitchHandler } = require("./handlers/twitch");
 const { TwitchClipHandler } = require("./handlers/twitchclip");
 
 const PlayerState = {
+	ENDED: 0,
 	RUNNING: 1,
 	PAUSED: 2
 };
@@ -303,7 +304,7 @@ exports.PlaylistService = class extends ServiceBase {
 			throw new Error("User has no permission to control video");
 		}
 
-		this.time = Math.ceil(event);
+		this.time = Math.round(event);
 		this.log.info(events.EVENT_ADMIN_FORCED_VIDEO_CHANGE, "{mod} seeked to {event}", {
 			mod: getSocketName(socket),
 			event
@@ -318,10 +319,11 @@ exports.PlaylistService = class extends ServiceBase {
 			throw new Error("User has no permission to control video");
 		}
 
-		this.log.info(events.EVENT_ADMIN_FORCED_VIDEO_CHANGE, "{mod} paused video at {event} with videolength of {duration}", {
+		this.log.info(events.EVENT_ADMIN_FORCED_VIDEO_CHANGE, "{mod} paused video at {event} with videolength of {duration} with state of {state}", {
 			mod: getSocketName(socket),
 			event: this.time,
-			duration: this.current.duration()
+			duration: this.current.duration(),
+			state: data.state
 		});
 		
 		this.paused = data.state === PlayerState.PAUSED;
@@ -369,7 +371,7 @@ exports.PlaylistService = class extends ServiceBase {
 		}
 
 		//always assume we advance 1s
-		this.time += Math.ceil(elapsed / 1000);
+		this.time += Math.round(elapsed / 1000);
 
 		if (this.time + 1 >= this.current.duration() + settings.vc.tail_time) {
 			this.advance();

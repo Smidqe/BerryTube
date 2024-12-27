@@ -2,11 +2,15 @@ function onYouTubeIframeAPIReady() {
 	setVal("YTAPREADY", true);
 }
 function videoEnded() {
+	console.log('it ended', controlsVideo());
+	
 	if (controlsVideo()) {
 		forceStateChange();
 	}
 }
 function videoSeeked(time) {
+	console.log(time, controlsVideo());
+
 	if (!controlsVideo()) {
 		return;
 	}
@@ -15,6 +19,8 @@ function videoSeeked(time) {
 	socket.emit("videoSeek", time);
 }
 function videoPlaying() {
+	console.log('is playing', controlsVideo());
+
 	if (!controlsVideo()) {
 		return;
 	}
@@ -22,6 +28,8 @@ function videoPlaying() {
 	PLAYER.getTime(() => forceStateChange());
 }
 function videoPaused() {
+	console.log('video paused', controlsVideo());
+
 	if (!controlsVideo()) {
 		return;
 	}
